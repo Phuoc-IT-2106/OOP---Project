@@ -14,5 +14,69 @@
     "eval_type": "keyword",
     "expected_keywords": ["lines"],
     "max_steps": 8
+  },
+  {
+    "id": "task_003",
+    "description": "Lay thoi gian hien tai",
+    "instruction": "Dung tool phu hop de lay thoi gian hien tai va tra loi theo dinh dang ngan gon",
+    "eval_type": "keyword",
+    "expected_keywords": ["time"],
+    "max_steps": 5
+  },
+  {
+    "id": "task_004",
+    "description": "Liet ke thu muc workspace",
+    "instruction": "Liet ke cac file va thu muc cap cao trong workspace",
+    "eval_type": "keyword",
+    "expected_keywords": ["src", "skills", "benchmark"],
+    "max_steps": 8
+  },
+  {
+    "id": "task_005",
+    "description": "Tinh toan roi ghi file",
+    "instruction": "Tinh (42 + 18) / 3 va ghi ket qua vao output/calc.txt",
+    "eval_type": "functional",
+    "eval_script": "placeholder",
+    "max_steps": 10
+  },
+  {
+    "id": "task_006",
+    "description": "Doc file roi thong ke van ban",
+    "instruction": "Doc file notes.txt, dem so dong va so tu, sau do tra loi tom tat",
+    "eval_type": "keyword",
+    "expected_keywords": ["words", "lines"],
+    "max_steps": 10
+  },
+  {
+    "id": "task_007",
+    "description": "Luu va tim memory",
+    "instruction": "Luu memory 'project_language=C++17', sau do tim lai memory lien quan den project_language",
+    "eval_type": "keyword",
+    "expected_keywords": ["C++17"],
+    "max_steps": 10
+  },
+  {
+    "id": "task_008",
+    "description": "Ket hop liet ke thu muc va doc file",
+    "instruction": "Liet ke thu muc skills, chon skill tool_usage.md va tom tat noi dung cua no",
+    "eval_type": "keyword",
+    "expected_keywords": ["tool", "usage"],
+    "max_steps": 12
+  },
+  {
+    "id": "task_009",
+    "description": "Multi-step voi tinh toan, file va memory",
+    "instruction": "Tinh 15 * 17, ghi vao result.txt, sau do luu ket qua vao memory voi key multiply_result",
+    "eval_type": "functional",
+    "eval_script": "placeholder",
+    "max_steps": 15
+  },
+  {
+    "id": "task_010",
+    "description": "Task kho can tu quyet dinh thu tu tool",
+    "instruction": "Kiem tra workspace co README.md khong, doc file neu co, dem so tu va ghi tom tat vao summary.txt",
+    "eval_type": "functional",
+    "eval_script": "placeholder",
+    "max_steps": 15
   }
 ]

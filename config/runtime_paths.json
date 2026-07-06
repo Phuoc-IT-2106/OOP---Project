@@ -1,5 +1,0 @@
-{
-  "workspace": ".",
-  "memory_database": "data/memory.sqlite3",
-  "trajectory_output": "trajectories"
-}

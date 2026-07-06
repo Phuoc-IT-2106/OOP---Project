@@ -1,1 +1,0 @@
-// Placeholder: optional VLMEvaluator declaration.

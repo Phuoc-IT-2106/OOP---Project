@@ -5,11 +5,8 @@ He thong duoc chia thanh cac tang doc lap:
 - `client`: abstraction cho LLM backend.
 - `tools`: tool interface, registry, factory va cac tool cu the.
 - `skills`: load va chon markdown instruction files.
-- `agent`: ReAct loop, prompt builder va loop detector.
-- `harness`: setup environment, run agent, evaluate va record.
-- `evaluator`: Strategy hierarchy cho cac cach cham diem.
-- `recorder`: ghi trajectory JSON.
-- `environment`: abstraction cho native/sandbox execution.
+- `agent`: ReAct loop va loop detector.
+- `harness`: setup environment, run agent, evaluate, hook, environment va trajectory recording.
 
 Nguyen tac thiet ke:
 

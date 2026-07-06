@@ -13,18 +13,21 @@ Do an mon Lap trinh Huong doi tuong 2026: xay dung mot AI Agent framework bang C
 ## Cau truc repo
 
 ```text
-include/oop_agent/   Header va interface public cua framework
-src/                 Implementation theo tung module
+src/                 Header va implementation theo tung module
 skills/              Markdown instruction files cho SkillLoader
 benchmark/           Task benchmark va runner danh gia
 tests/               Unit/integration tests
 docs/                UML, sequence diagram, component diagram va bao cao
-config/              Cau hinh agent, tool policy va runtime path
-scripts/             Script build, run, benchmark, format
-cmake/               CMake helper modules
-third_party/         Ghi chu dependency ben thu ba
 ```
 
 ## Trang thai hien tai
 
 Repo dang o buoc scaffold kien truc. Cac file C++ hien la placeholder de dinh vi module, chua co logic trien khai.
+
+## Module chinh
+
+- `src/client`: `LLMClient`, `OllamaClient`.
+- `src/tools`: `Tool`, `ToolRegistry`, 5 tool bat buoc va 3 tool mo rong.
+- `src/skills`: `SkillLoader`.
+- `src/agent`: `AgentLoop`, `LoopDetector`.
+- `src/harness`: `HarnessRunner`, `Trajectory`, `Evaluator`, `Environment`, hook va recorder.

@@ -1,1 +1,0 @@
-// Placeholder: string utility implementation.
