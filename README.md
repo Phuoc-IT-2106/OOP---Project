@@ -31,3 +31,11 @@ Repo dang o buoc scaffold kien truc. Cac file C++ hien la placeholder de dinh vi
 - `src/skills`: `SkillLoader`.
 - `src/agent`: `AgentLoop`, `LoopDetector`.
 - `src/harness`: `HarnessRunner`, `Trajectory`, `Evaluator`, `Environment`, hook va recorder.
+
+## Git theo doi dong gop
+
+Repo co them tai lieu de gioi thieu cach theo doi lich su commit/push tung thanh vien:
+
+- [Git Workflow](docs/git-workflow.md)
+- [Contribution Log Template](docs/contribution-log-template.md)
+- [Contributing Guide](CONTRIBUTING.md)
