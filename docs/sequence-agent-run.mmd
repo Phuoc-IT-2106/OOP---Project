@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant User
+    participant AgentLoop
+    participant SkillLoader
+    participant LLMClient
+    participant ToolRegistry
+    participant Tool
+
+    User->>AgentLoop: task
+    AgentLoop->>SkillLoader: select skills
+    AgentLoop->>LLMClient: chat(history + system prompt)
+    LLMClient-->>AgentLoop: thought/action JSON
+    AgentLoop->>ToolRegistry: executeTool(name, args)
+    ToolRegistry->>Tool: execute(args)
+    Tool-->>AgentLoop: ToolResult
+    AgentLoop-->>User: final answer

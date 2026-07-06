@@ -1,0 +1,12 @@
+flowchart LR
+    CLI[Command Line App] --> Harness[Harness Runner]
+    Harness --> Agent[Agent Loop]
+    Agent --> Client[LLM Client]
+    Agent --> Tools[Tool Registry]
+    Agent --> Skills[Skill Loader]
+    Agent --> Detector[Loop Detector]
+    Harness --> Evaluator[Evaluators]
+    Harness --> Recorder[Trajectory Recorder]
+    Tools --> SQLite[(SQLite Memory)]
+    Tools --> FS[(Workspace Files)]
+    Client --> Ollama[Ollama/OpenAI Compatible API]

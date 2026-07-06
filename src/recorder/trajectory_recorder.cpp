@@ -1,0 +1,1 @@
+// Placeholder: TrajectoryRecorder implementation.

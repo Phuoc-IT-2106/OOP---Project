@@ -1,0 +1,5 @@
+{
+  "tasks_file": "benchmark/tasks.json",
+  "output_dir": "trajectories",
+  "default_max_steps": 10
+}

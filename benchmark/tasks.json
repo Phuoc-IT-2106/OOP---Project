@@ -1,0 +1,18 @@
+[
+  {
+    "id": "task_001",
+    "description": "Tinh 15 * 17 va luu ket qua vao file result.txt",
+    "instruction": "Tinh 15 nhan 17. Luu ket qua vao file result.txt",
+    "eval_type": "functional",
+    "eval_script": "placeholder",
+    "max_steps": 10
+  },
+  {
+    "id": "task_002",
+    "description": "Doc file input.txt va dem so dong",
+    "instruction": "Doc file input.txt va cho biet so dong",
+    "eval_type": "keyword",
+    "expected_keywords": ["lines"],
+    "max_steps": 8
+  }
+]

@@ -1,0 +1,25 @@
+classDiagram
+    class LLMClient
+    class OllamaClient
+    class Tool
+    class ToolRegistry
+    class SkillLoader
+    class AgentLoop
+    class LoopDetector
+    class HarnessRunner
+    class Evaluator
+    class KeywordEvaluator
+    class FunctionalEvaluator
+    class TrajectoryRecorder
+
+    LLMClient <|-- OllamaClient
+    ToolRegistry o-- Tool
+    AgentLoop o-- LLMClient
+    AgentLoop o-- ToolRegistry
+    AgentLoop o-- SkillLoader
+    AgentLoop o-- LoopDetector
+    Evaluator <|-- KeywordEvaluator
+    Evaluator <|-- FunctionalEvaluator
+    HarnessRunner o-- AgentLoop
+    HarnessRunner o-- Evaluator
+    HarnessRunner o-- TrajectoryRecorder

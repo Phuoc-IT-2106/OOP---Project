@@ -1,0 +1,1 @@
+// Placeholder: TextStatsTool declaration.

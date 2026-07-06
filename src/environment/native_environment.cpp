@@ -1,0 +1,1 @@
+// Placeholder: NativeEnvironment implementation.

@@ -1,0 +1,6 @@
+{
+  "allowlist": [],
+  "denylist": [
+    "dangerous_command_placeholder"
+  ]
+}

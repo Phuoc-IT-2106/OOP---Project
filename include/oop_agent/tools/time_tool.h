@@ -1,0 +1,1 @@
+// Placeholder: TimeTool declaration.

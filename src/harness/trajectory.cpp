@@ -1,0 +1,1 @@
+// Placeholder: Trajectory implementation.

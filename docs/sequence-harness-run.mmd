@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant HarnessRunner
+    participant Environment
+    participant AgentLoop
+    participant Evaluator
+    participant TrajectoryRecorder
+
+    HarnessRunner->>Environment: setup
+    HarnessRunner->>AgentLoop: run task with step hook
+    AgentLoop-->>HarnessRunner: agent result
+    HarnessRunner->>Evaluator: evaluate result
+    Evaluator-->>HarnessRunner: score
+    HarnessRunner->>TrajectoryRecorder: save JSON trajectory

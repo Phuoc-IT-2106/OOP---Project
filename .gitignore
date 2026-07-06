@@ -1,0 +1,29 @@
+# Build outputs
+build/
+out/
+bin/
+lib/
+
+# Runtime data
+data/
+logs/
+trajectories/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE/editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# OS
+Thumbs.db
+Desktop.ini
