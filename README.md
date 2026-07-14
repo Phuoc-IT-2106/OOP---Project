@@ -21,7 +21,7 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool` va `WriteFileTool` da san sang de tich hop vao `AgentLoop`.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool` va `WebSearchTool` da san sang de tich hop vao `AgentLoop`.
 
 ## Module chinh
 
@@ -50,6 +50,12 @@ registry.registerFactory("write_file", [files] {
     return std::make_unique<oop_agent::tools::WriteFileTool>(files);
 });
 
+oop_agent::tools::WebSearchConfig search;
+search.base_url = "http://localhost:8080"; // SearXNG instance
+registry.registerFactory("web_search", [search] {
+    return std::make_unique<oop_agent::tools::WebSearchTool>(search);
+});
+
 // Deny-list luon duoc uu tien hon allow-list.
 registry.deny({"exec"});
 ```
@@ -59,12 +65,14 @@ Contract argument hien tai:
 - `exec`: `command`.
 - `read_file`: `path`.
 - `write_file`: `path`, `content`, va `append` tuy chon (`true`/`false`).
+- `web_search`: `query` va `max_results` tuy chon (mac dinh 5, toi da 10).
 
 File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 MiB.
+`WebSearchTool` goi `GET /search` cua SearXNG voi `format=json`. SearXNG instance can bat JSON format; neu bi tat, server co the tra ve HTTP 403.
 
 ## Dependencies
 
-Module `OllamaClient` dung `libcurl` de gui HTTP POST va `nlohmann/json` de xu ly JSON.
+Module `OllamaClient` va `WebSearchTool` dung `libcurl` de gui HTTP request va `nlohmann/json` de xu ly JSON.
 
 Tren MSYS2 CLANG64 co the cai bang:
 

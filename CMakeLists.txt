@@ -28,11 +28,19 @@ add_library(oop_agent_tools
     src/tools/tool_registry.cpp
     src/tools/exec_tool.cpp
     src/tools/file_tool.cpp
+    src/tools/web_search_tool.cpp
+    src/tools/searxng_transport.cpp
 )
 
 target_include_directories(oop_agent_tools
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(oop_agent_tools
+    PUBLIC
+        CURL::libcurl
+        nlohmann_json::nlohmann_json
 )
 
 include(CTest)

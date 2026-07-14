@@ -3,6 +3,7 @@
 #include "tools/exec_tool.h"
 #include "tools/file_tool.h"
 #include "tools/tool_registry.h"
+#include "tools/web_search_tool.h"
 
 #include <filesystem>
 #include <iostream>
@@ -18,6 +19,11 @@ using oop_agent::tools::FileToolConfig;
 using oop_agent::tools::ReadFileTool;
 using oop_agent::tools::ToolRegistry;
 using oop_agent::tools::WriteFileTool;
+using oop_agent::tools::WebSearchConfig;
+using oop_agent::tools::WebSearchRequest;
+using oop_agent::tools::WebSearchResponse;
+using oop_agent::tools::WebSearchResult;
+using oop_agent::tools::WebSearchTool;
 
 void expect(bool condition, const std::string &message) {
     if (!condition) {
@@ -116,6 +122,57 @@ void testFileToolsThroughRegistry() {
     fs::remove_all(workspace);
 }
 
+void testWebSearchToolWithInjectedTransport() {
+    WebSearchConfig config;
+    config.default_max_results = 2;
+    config.max_results_limit = 3;
+    config.language = "vi";
+
+    WebSearchRequest captured_request;
+    const WebSearchTool::SearchTransport transport =
+        [&captured_request](const WebSearchRequest &request) {
+            captured_request = request;
+            return WebSearchResponse{
+                200,
+                {{"Registry pattern", "https://example.com/registry", "Factory lookup."},
+                 {"C++ Tool", "https://example.com/tool", "Abstract command."},
+                 {"Ignored", "https://example.com/ignored", "Past requested limit."}},
+                {}};
+        };
+
+    ToolRegistry registry;
+    expect(registry.registerFactory("web_search", [config, transport] {
+               return std::make_unique<WebSearchTool>(config, transport);
+           }),
+           "web_search registration should succeed");
+
+    expect(!registry.execute("web_search", {}).success,
+           "web_search should require a query");
+    expect(!registry.execute("web_search",
+                             {{"query", "C++ registry"}, {"max_results", "4"}})
+                .success,
+           "web_search should enforce its result limit");
+
+    const auto result = registry.execute(
+        "web_search", {{"query", "C++ registry"}, {"max_results", "2"}});
+    expect(result.success, "injected web search should succeed");
+    expect(captured_request.query == "C++ registry" &&
+               captured_request.language == "vi" && captured_request.max_results == 2,
+           "web_search should pass validated options to its transport");
+    expect(result.output.find("Registry pattern") != std::string::npos &&
+               result.output.find("https://example.com/tool") != std::string::npos,
+           "web_search should format titles, URLs, and snippets");
+    expect(result.output.find("Ignored") == std::string::npos,
+           "web_search should not return more than max_results");
+
+    WebSearchTool failing_tool(config, [](const WebSearchRequest &) {
+        return WebSearchResponse{503, {}, {}};
+    });
+    const auto failure = failing_tool.execute({{"query", "unavailable"}});
+    expect(!failure.success && failure.error_message.find("503") != std::string::npos,
+           "web_search should report non-success HTTP status");
+}
+
 } // namespace
 
 int main() {
@@ -124,6 +181,7 @@ int main() {
         testRegistryAndPolicy();
         testExecTool();
         testFileToolsThroughRegistry();
+        testWebSearchToolWithInjectedTransport();
         std::cout << "All tool tests passed\n";
         return 0;
     } catch (const std::exception &error) {
