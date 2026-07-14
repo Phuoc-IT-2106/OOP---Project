@@ -1,16 +1,48 @@
 sequenceDiagram
+    autonumber
     participant User
     participant AgentLoop
     participant SkillLoader
     participant LLMClient
+    participant LoopDetector
     participant ToolRegistry
     participant Tool
 
     User->>AgentLoop: task
+    activate AgentLoop
+    
+    %% Tầng Skill System
     AgentLoop->>SkillLoader: select skills
-    AgentLoop->>LLMClient: chat(history + system prompt)
-    LLMClient-->>AgentLoop: thought/action JSON
-    AgentLoop->>ToolRegistry: executeTool(name, args)
-    ToolRegistry->>Tool: execute(args)
-    Tool-->>AgentLoop: ToolResult
+    activate SkillLoader
+    SkillLoader-->>AgentLoop: system prompt
+    deactivate SkillLoader
+
+    %% Vòng lặp ReAct
+    rect rgb(240, 248, 255)
+        Note over AgentLoop: Vòng lặp ReAct (Observe -> Think -> Act)
+        
+        AgentLoop->>LLMClient: chat(history + system prompt)
+        activate LLMClient
+        LLMClient-->>AgentLoop: thought/action JSON
+        deactivate LLMClient
+
+        %% Phát hiện Loop bắt buộc theo đặc tả đồ án
+        AgentLoop->>LoopDetector: detectLoop(action)
+        activate LoopDetector
+        LoopDetector-->>AgentLoop: isLoop (false)
+        deactivate LoopDetector
+
+        AgentLoop->>ToolRegistry: executeTool(name, args)
+        activate ToolRegistry
+        
+        ToolRegistry->>Tool: execute(args)
+        activate Tool
+        Tool-->>AgentLoop: ToolResult
+        deactivate Tool
+        
+        deactivate ToolRegistry
+    end
+    
+    Note over AgentLoop: Kích hoạt step_hook(Step) để Harness ghi lại log
     AgentLoop-->>User: final answer
+    deactivate AgentLoop
