@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 add_library(oop_agent_client
     src/client/ollama_client.cpp
@@ -30,6 +31,8 @@ add_library(oop_agent_tools
     src/tools/file_tool.cpp
     src/tools/web_search_tool.cpp
     src/tools/searxng_transport.cpp
+    src/tools/memory_tool.cpp
+    src/tools/sqlite_memory_store.cpp
 )
 
 target_include_directories(oop_agent_tools
@@ -41,6 +44,7 @@ target_link_libraries(oop_agent_tools
     PUBLIC
         CURL::libcurl
         nlohmann_json::nlohmann_json
+        SQLite::SQLite3
 )
 
 include(CTest)

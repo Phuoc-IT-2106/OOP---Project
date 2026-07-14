@@ -21,7 +21,7 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool` va `WebSearchTool` da san sang de tich hop vao `AgentLoop`.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
 
 ## Module chinh
 
@@ -56,6 +56,16 @@ registry.registerFactory("web_search", [search] {
     return std::make_unique<oop_agent::tools::WebSearchTool>(search);
 });
 
+oop_agent::tools::MemoryToolConfig memory_config;
+memory_config.database_path = "data/memory.sqlite3";
+auto memory_store = oop_agent::tools::makeSqliteMemoryStore(memory_config);
+registry.registerFactory("memory_save", [memory_store, memory_config] {
+    return std::make_unique<oop_agent::tools::MemorySaveTool>(memory_store, memory_config);
+});
+registry.registerFactory("memory_search", [memory_store, memory_config] {
+    return std::make_unique<oop_agent::tools::MemorySearchTool>(memory_store, memory_config);
+});
+
 // Deny-list luon duoc uu tien hon allow-list.
 registry.deny({"exec"});
 ```
@@ -66,18 +76,21 @@ Contract argument hien tai:
 - `read_file`: `path`.
 - `write_file`: `path`, `content`, va `append` tuy chon (`true`/`false`).
 - `web_search`: `query` va `max_results` tuy chon (mac dinh 5, toi da 10).
+- `memory_save`: `content` va `tags` tuy chon.
+- `memory_search`: `query` va `limit` tuy chon (mac dinh 5, toi da 20).
 
 File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 MiB.
 `WebSearchTool` goi `GET /search` cua SearXNG voi `format=json`. SearXNG instance can bat JSON format; neu bi tat, server co the tra ve HTTP 403.
+Memory duoc luu ben vung trong SQLite. `memory_search` tim keyword literal trong ca noi dung va tags, uu tien memory moi nhat.
 
 ## Dependencies
 
-Module `OllamaClient` va `WebSearchTool` dung `libcurl` de gui HTTP request va `nlohmann/json` de xu ly JSON.
+Module `OllamaClient` va `WebSearchTool` dung `libcurl` de gui HTTP request va `nlohmann/json` de xu ly JSON. Hai memory tool dung SQLite3.
 
 Tren MSYS2 CLANG64 co the cai bang:
 
 ```bash
-pacman -S --needed mingw-w64-clang-x86_64-cmake mingw-w64-clang-x86_64-curl mingw-w64-clang-x86_64-nlohmann-json
+pacman -S --needed mingw-w64-clang-x86_64-cmake mingw-w64-clang-x86_64-curl mingw-w64-clang-x86_64-nlohmann-json mingw-w64-clang-x86_64-sqlite3
 ```
 
 Build voi CMake:

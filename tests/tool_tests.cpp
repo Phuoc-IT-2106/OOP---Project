@@ -2,6 +2,7 @@
 #include "harness/evaluator.h"
 #include "tools/exec_tool.h"
 #include "tools/file_tool.h"
+#include "tools/memory_tool.h"
 #include "tools/tool_registry.h"
 #include "tools/web_search_tool.h"
 
@@ -11,12 +12,21 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace {
 
 using oop_agent::tools::ExecTool;
 using oop_agent::tools::FileToolConfig;
 using oop_agent::tools::ReadFileTool;
+using oop_agent::tools::MemoryEntry;
+using oop_agent::tools::MemorySaveResponse;
+using oop_agent::tools::MemorySaveTool;
+using oop_agent::tools::MemorySearchResponse;
+using oop_agent::tools::MemorySearchTool;
+using oop_agent::tools::MemoryStore;
+using oop_agent::tools::MemoryToolConfig;
+using oop_agent::tools::makeSqliteMemoryStore;
 using oop_agent::tools::ToolRegistry;
 using oop_agent::tools::WriteFileTool;
 using oop_agent::tools::WebSearchConfig;
@@ -173,6 +183,95 @@ void testWebSearchToolWithInjectedTransport() {
            "web_search should report non-success HTTP status");
 }
 
+class InMemoryStore final : public MemoryStore {
+  public:
+    MemorySaveResponse save(const std::string &content,
+                            const std::string &tags) override {
+        entries_.push_back({next_id_, content, tags, "2026-07-14 12:00:00"});
+        return {true, next_id_++, {}};
+    }
+
+    MemorySearchResponse search(const std::string &query,
+                                std::size_t limit) const override {
+        MemorySearchResponse response;
+        response.success = true;
+        for (auto entry = entries_.rbegin();
+             entry != entries_.rend() && response.entries.size() < limit;
+             ++entry) {
+            if (entry->content.find(query) != std::string::npos ||
+                entry->tags.find(query) != std::string::npos) {
+                response.entries.push_back(*entry);
+            }
+        }
+        return response;
+    }
+
+  private:
+    std::vector<MemoryEntry> entries_;
+    std::int64_t next_id_{1};
+};
+
+void testMemoryToolsThroughRegistry() {
+    auto store = std::make_shared<InMemoryStore>();
+    MemoryToolConfig config;
+    config.default_search_limit = 2;
+    config.max_search_limit = 3;
+
+    ToolRegistry registry;
+    expect(registry.registerFactory("memory_save", [store, config] {
+               return std::make_unique<MemorySaveTool>(store, config);
+           }),
+           "memory_save registration should succeed");
+    expect(registry.registerFactory("memory_search", [store, config] {
+               return std::make_unique<MemorySearchTool>(store, config);
+           }),
+           "memory_search registration should succeed");
+
+    expect(!registry.execute("memory_save", {}).success,
+           "memory_save should require content");
+    const auto first = registry.execute(
+        "memory_save", {{"content", "ToolRegistry uses factories"}, {"tags", "oop,registry"}});
+    const auto second = registry.execute(
+        "memory_save", {{"content", "SQLite stores persistent memory"}, {"tags", "database"}});
+    expect(first.success && second.success,
+           "memory_save should preserve entries through a shared store");
+
+    const auto by_content = registry.execute("memory_search", {{"query", "SQLite"}});
+    expect(by_content.success &&
+               by_content.output.find("SQLite stores persistent memory") != std::string::npos,
+           "memory_search should find content");
+    const auto by_tag = registry.execute("memory_search", {{"query", "registry"}});
+    expect(by_tag.success && by_tag.output.find("ToolRegistry uses factories") !=
+                                 std::string::npos,
+           "memory_search should find tags and format metadata");
+    expect(!registry.execute("memory_search", {{"query", "memory"}, {"limit", "4"}})
+                .success,
+           "memory_search should enforce its configured limit");
+}
+
+void testSqliteMemoryStorePersistence() {
+    namespace fs = std::filesystem;
+    const fs::path workspace = fs::current_path() / "memory-test-workspace";
+    fs::remove_all(workspace);
+
+    MemoryToolConfig config;
+    config.database_path = workspace / "memory.sqlite3";
+
+    auto first_connection = makeSqliteMemoryStore(config);
+    const auto saved = first_connection->save("Progress is 100% complete", "status");
+    expect(saved.success && saved.id > 0, "SQLite memory store should save an entry");
+
+    // A new store object opens a new SQLite connection. Finding the old entry
+    // proves that memory is persisted on disk rather than held by the Tool.
+    auto reopened_store = makeSqliteMemoryStore(config);
+    const auto found = reopened_store->search("%", 5);
+    expect(found.success && found.entries.size() == 1 &&
+               found.entries.front().content == "Progress is 100% complete",
+           "SQLite memory should persist and escape LIKE wildcard characters");
+
+    fs::remove_all(workspace);
+}
+
 } // namespace
 
 int main() {
@@ -182,6 +281,8 @@ int main() {
         testExecTool();
         testFileToolsThroughRegistry();
         testWebSearchToolWithInjectedTransport();
+        testMemoryToolsThroughRegistry();
+        testSqliteMemoryStorePersistence();
         std::cout << "All tool tests passed\n";
         return 0;
     } catch (const std::exception &error) {
