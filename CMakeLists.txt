@@ -23,3 +23,23 @@ target_link_libraries(oop_agent_client
         CURL::libcurl
         nlohmann_json::nlohmann_json
 )
+
+add_library(oop_agent_tools
+    src/tools/tool_registry.cpp
+    src/tools/exec_tool.cpp
+    src/tools/file_tool.cpp
+)
+
+target_include_directories(oop_agent_tools
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(oop_agent_tool_tests
+        tests/tool_tests.cpp
+    )
+    target_link_libraries(oop_agent_tool_tests PRIVATE oop_agent_tools)
+    add_test(NAME oop_agent_tool_tests COMMAND oop_agent_tool_tests)
+endif()

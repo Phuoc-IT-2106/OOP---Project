@@ -27,8 +27,12 @@ struct ChatResponse {
 
 class LLMClient {
   public:
+    // Polymorphic base classes need a virtual destructor so deleting an
+    // OllamaClient through LLMClient* releases the complete derived object.
     virtual ~LLMClient() = default;
 
+    // AgentLoop depends only on this operation. A future OpenAIClient can be
+    // substituted without changing the agent algorithm (Dependency Inversion).
     virtual ChatResponse chat(const ChatRequest &request) = 0;
 };
 

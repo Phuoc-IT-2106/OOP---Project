@@ -21,7 +21,7 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o buoc scaffold kien truc va bat dau trien khai module client. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`, cac module khac van giu khung lop de tiep tuc phat trien theo tung task.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool` va `WriteFileTool` da san sang de tich hop vao `AgentLoop`.
 
 ## Module chinh
 
@@ -30,6 +30,37 @@ Repo dang o buoc scaffold kien truc va bat dau trien khai module client. `Ollama
 - `src/skills`: `SkillLoader`.
 - `src/agent`: `AgentLoop`, `LoopDetector`.
 - `src/harness`: `HarnessRunner`, `Trajectory`, `Evaluator`, `Environment`, hook va recorder.
+
+## Dang ky tool dong
+
+`ToolRegistry` luu factory theo ten, tao tool khi can chay va ap dung allow/deny policy. Vi du composition root cua chuong trinh co the dang ky cac tool ma khong sua registry:
+
+```cpp
+oop_agent::tools::ToolRegistry registry;
+oop_agent::tools::FileToolConfig files;
+files.root_directory = "workspace";
+
+registry.registerFactory("exec", [] {
+    return std::make_unique<oop_agent::tools::ExecTool>();
+});
+registry.registerFactory("read_file", [files] {
+    return std::make_unique<oop_agent::tools::ReadFileTool>(files);
+});
+registry.registerFactory("write_file", [files] {
+    return std::make_unique<oop_agent::tools::WriteFileTool>(files);
+});
+
+// Deny-list luon duoc uu tien hon allow-list.
+registry.deny({"exec"});
+```
+
+Contract argument hien tai:
+
+- `exec`: `command`.
+- `read_file`: `path`.
+- `write_file`: `path`, `content`, va `append` tuy chon (`true`/`false`).
+
+File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 MiB.
 
 ## Dependencies
 
