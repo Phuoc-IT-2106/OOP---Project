@@ -1,25 +1,105 @@
 classDiagram
-    class LLMClient
-    class OllamaClient
-    class Tool
-    class ToolRegistry
-    class SkillLoader
-    class AgentLoop
-    class LoopDetector
-    class HarnessRunner
-    class Evaluator
-    class KeywordEvaluator
-    class FunctionalEvaluator
-    class TrajectoryRecorder
+    class LLMClient {
+        <<abstract>>
+        # string baseUrl
+        # string modelName
+        # float temperature
+        + getCompletion(string prompt) string*
+    }
+    class OllamaClient {
+        + getCompletion(string prompt) string
+        - sendHttpPost(string endpoint, string jsonPayload) string
+    }
+    LLMClient <|-- OllamaClient : Inheritance
 
-    LLMClient <|-- OllamaClient
-    ToolRegistry o-- Tool
-    AgentLoop o-- LLMClient
-    AgentLoop o-- ToolRegistry
-    AgentLoop o-- SkillLoader
-    AgentLoop o-- LoopDetector
-    Evaluator <|-- KeywordEvaluator
-    Evaluator <|-- FunctionalEvaluator
-    HarnessRunner o-- AgentLoop
-    HarnessRunner o-- Evaluator
-    HarnessRunner o-- TrajectoryRecorder
+    class Tool {
+        <<abstract>>
+        + string name
+        + string description
+        + execute(string args)* string
+    }
+    class ExecTool { 
++ execute(string args) string }
+    class FileTool { 
++ execute(string args) string }
+    class WebSearchTool { 
++ execute(string args) string }
+    class MemoryTool { 
++ execute(string args) string }
+    class CalculatorTool { 
++ execute(string args) string }
+    
+    Tool <|-- ExecTool
+    Tool <|-- FileTool
+    Tool <|-- WebSearchTool
+    Tool <|-- MemoryTool
+    Tool <|-- CalculatorTool
+
+    class ToolRegistry {
+        - map<string, unique_ptr~Tool~> tools
+        + registerTool(unique_ptr~Tool~ tool)
+        + getTool(string name) Tool*
+        + executeTool(string name, string args) string
+    }
+    ToolRegistry "1" *-- "many" Tool : Composition (Registry Pattern)
+
+    class SkillLoader {
+        - string skillsDir
+        + loadSkills() vector~string~
+        + selectSkill(string taskDescription) string
+    }
+
+    class LoopDetector {
+        - vector~string~ history
+        + detectLoop(string currentAction) bool
+    }
+
+    class AgentLoop {
+        - LLMClient* client
+        - ToolRegistry* registry
+        - SkillLoader* skillLoader
+        - LoopDetector* detector
+        - function~void(Step)~ stepHook
+        + setStepHook(function~void(Step)~ hook)
+        + run(string task) Trajectory
+        # observe() Step
+        # think(Step step) string
+        # act(string action) string
+    }
+    AgentLoop "1" o-- "1" LLMClient : Aggregation
+    AgentLoop "1" o-- "1" ToolRegistry : Aggregation
+    AgentLoop "1" o-- "1" SkillLoader : Aggregation
+    AgentLoop "1" o-- "1" LoopDetector : Aggregation
+
+    class Evaluator {
+        <<abstract>>
+        + evaluate(Trajectory t)* double
+    }
+    class KeywordEvaluator { + evaluate(Trajectory t) double }
+    class FunctionalEvaluator { + evaluate(Trajectory t) double }
+    
+    Evaluator <|-- KeywordEvaluator : Strategy Pattern
+    Evaluator <|-- FunctionalEvaluator : Strategy Pattern
+
+    class Trajectory {
+        + string taskId
+        + bool success
+        + vector~Step~ steps
+    }
+    class Step {
+        + int stepId
+        + string thought
+        + string action
+        + string result
+    }
+    Trajectory "1" *-- "many" Step : Composition
+
+    class HarnessRunner {
+        - vector~unique_ptr~Evaluator~~ evaluators
+        - AgentLoop agent
+        + runBatch(string tasksJsonPath)
+        - recordTrajectory(Trajectory t)
+    }
+    HarnessRunner "1" *-- "many" Evaluator : Strategy Usage
+    HarnessRunner "1" o-- "1" AgentLoop : Directs / Observes
+    HarnessRunner ..> Trajectory : Processes (Dependency)
