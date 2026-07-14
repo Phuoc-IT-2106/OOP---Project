@@ -1,1 +1,0 @@
-// Placeholder: loop detector tests.

@@ -1,5 +1,6 @@
 # Build outputs
 build/
+build*/
 out/
 bin/
 lib/
@@ -15,6 +16,8 @@ trajectories/
 # IDE/editor
 .vs/
 .vscode/
+!.vscode/
+!.vscode/c_cpp_properties.json
 .idea/
 *.user
 *.suo

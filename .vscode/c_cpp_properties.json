@@ -1,0 +1,17 @@
+{
+  "configurations": [
+    {
+      "name": "MSYS2 CLANG64",
+      "compilerPath": "C:/msys64/mingw64/clang64/bin/clang++.exe",
+      "cppStandard": "c++17",
+      "cStandard": "c17",
+      "intelliSenseMode": "windows-clang-x64",
+      "includePath": [
+        "${workspaceFolder}/src",
+        "C:/msys64/mingw64/clang64/include",
+        "C:/msys64/mingw64/clang64/include/c++/v1"
+      ]
+    }
+  ],
+  "version": 4
+}

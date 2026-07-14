@@ -16,13 +16,12 @@ Do an mon Lap trinh Huong doi tuong 2026: xay dung mot AI Agent framework bang C
 src/                 Header va implementation theo tung module
 skills/              Markdown instruction files cho SkillLoader
 benchmark/           Task benchmark va runner danh gia
-tests/               Unit/integration tests
 docs/                UML, sequence diagram, component diagram va bao cao
 ```
 
 ## Trang thai hien tai
 
-Repo dang o buoc scaffold kien truc. Cac file C++ hien la placeholder de dinh vi module, chua co logic trien khai.
+Repo dang o buoc scaffold kien truc va bat dau trien khai module client. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`, cac module khac van giu khung lop de tiep tuc phat trien theo tung task.
 
 ## Module chinh
 
@@ -31,6 +30,24 @@ Repo dang o buoc scaffold kien truc. Cac file C++ hien la placeholder de dinh vi
 - `src/skills`: `SkillLoader`.
 - `src/agent`: `AgentLoop`, `LoopDetector`.
 - `src/harness`: `HarnessRunner`, `Trajectory`, `Evaluator`, `Environment`, hook va recorder.
+
+## Dependencies
+
+Module `OllamaClient` dung `libcurl` de gui HTTP POST va `nlohmann/json` de xu ly JSON.
+
+Tren MSYS2 CLANG64 co the cai bang:
+
+```bash
+pacman -S --needed mingw-w64-clang-x86_64-cmake mingw-w64-clang-x86_64-curl mingw-w64-clang-x86_64-nlohmann-json
+```
+
+Build voi CMake:
+
+```bash
+cd /c/OOP\ -\ Project/OOP---Project
+cmake -S . -B build
+cmake --build build
+```
 
 ## Git theo doi dong gop
 
