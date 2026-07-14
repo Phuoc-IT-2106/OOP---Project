@@ -27,6 +27,7 @@ target_link_libraries(oop_agent_client
 
 add_library(oop_agent_tools
     src/tools/tool_registry.cpp
+    src/tools/calculator_tool.cpp
     src/tools/exec_tool.cpp
     src/tools/file_tool.cpp
     src/tools/web_search_tool.cpp

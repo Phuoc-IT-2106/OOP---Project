@@ -21,7 +21,7 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `CalculatorTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
 
 ## Module chinh
 
@@ -49,6 +49,9 @@ registry.registerFactory("read_file", [files] {
 registry.registerFactory("write_file", [files] {
     return std::make_unique<oop_agent::tools::WriteFileTool>(files);
 });
+registry.registerFactory("calculator", [] {
+    return std::make_unique<oop_agent::tools::CalculatorTool>();
+});
 
 oop_agent::tools::WebSearchConfig search;
 search.base_url = "http://localhost:8080"; // SearXNG instance
@@ -73,6 +76,7 @@ registry.deny({"exec"});
 Contract argument hien tai:
 
 - `exec`: `command`.
+- `calculator`: `expression`, ho tro `+`, `-`, `*`, `/`, ngoac tron va dau am/duong don ngoi.
 - `read_file`: `path`.
 - `write_file`: `path`, `content`, va `append` tuy chon (`true`/`false`).
 - `web_search`: `query` va `max_results` tuy chon (mac dinh 5, toi da 10).

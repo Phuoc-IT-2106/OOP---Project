@@ -1,5 +1,6 @@
 #include "client/llm_client.h"
 #include "harness/evaluator.h"
+#include "tools/calculator_tool.h"
 #include "tools/exec_tool.h"
 #include "tools/file_tool.h"
 #include "tools/memory_tool.h"
@@ -17,6 +18,7 @@
 namespace {
 
 using oop_agent::tools::ExecTool;
+using oop_agent::tools::CalculatorTool;
 using oop_agent::tools::FileToolConfig;
 using oop_agent::tools::ReadFileTool;
 using oop_agent::tools::MemoryEntry;
@@ -92,6 +94,32 @@ void testExecTool() {
            "exec should preserve a non-zero exit code");
     expect(failure.output.find("exec-error") != std::string::npos,
            "exec should capture stderr in its output");
+}
+
+void testCalculatorToolThroughRegistry() {
+    ToolRegistry registry;
+    expect(registry.registerFactory(
+               "calculator", [] { return std::make_unique<CalculatorTool>(); }),
+           "calculator registration should succeed");
+
+    expect(!registry.execute("calculator", {}).success,
+           "calculator should require an expression");
+
+    const auto precedence = registry.execute(
+        "calculator", {{"expression", "2 + 3 * 4"}});
+    expect(precedence.success && precedence.output == "14",
+           "calculator should respect operator precedence");
+
+    const auto parentheses = registry.execute(
+        "calculator", {{"expression", "(2 + 3) * -4 / 2"}});
+    expect(parentheses.success && parentheses.output == "-10",
+           "calculator should support parentheses and unary minus");
+
+    expect(!registry.execute("calculator", {{"expression", "1 / (2 - 2)"}})
+                .success,
+           "calculator should reject division by zero");
+    expect(!registry.execute("calculator", {{"expression", "2 +"}}).success,
+           "calculator should reject incomplete expressions");
 }
 
 void testFileToolsThroughRegistry() {
@@ -279,6 +307,7 @@ int main() {
         testAbstractInterfaces();
         testRegistryAndPolicy();
         testExecTool();
+        testCalculatorToolThroughRegistry();
         testFileToolsThroughRegistry();
         testWebSearchToolWithInjectedTransport();
         testMemoryToolsThroughRegistry();
