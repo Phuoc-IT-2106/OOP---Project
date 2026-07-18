@@ -1,13 +1,42 @@
 sequenceDiagram
+    autonumber
+
+    actor User
     participant HarnessRunner
     participant Environment
     participant AgentLoop
+    participant LLMClient
+    participant ToolRegistry
     participant Evaluator
     participant TrajectoryRecorder
 
-    HarnessRunner->>Environment: setup
-    HarnessRunner->>AgentLoop: run task with step hook
-    AgentLoop-->>HarnessRunner: agent result
-    HarnessRunner->>Evaluator: evaluate result
-    Evaluator-->>HarnessRunner: score
-    HarnessRunner->>TrajectoryRecorder: save JSON trajectory
+    User->>HarnessRunner: runTask(task)
+
+    HarnessRunner->>Environment: setup()
+
+    HarnessRunner->>AgentLoop: setStepHook(recordStep)
+
+    HarnessRunner->>AgentLoop: run(task)
+
+    loop Agent Loop
+        AgentLoop->>LLMClient: sendPrompt(history)
+        LLMClient-->>AgentLoop: response
+
+        alt Tool call required
+            AgentLoop->>ToolRegistry: executeTool(name,args)
+            ToolRegistry-->>AgentLoop: ToolResult
+            AgentLoop-->>HarnessRunner: Step
+            HarnessRunner->>TrajectoryRecorder: recordStep(step)
+        else Final answer
+            AgentLoop-->>HarnessRunner: AgentResult
+        end
+    end
+
+    HarnessRunner->>Evaluator: evaluate(task,result)
+    Evaluator-->>HarnessRunner: EvaluationResult
+
+    HarnessRunner->>TrajectoryRecorder: saveJSONTrajectory()
+
+    HarnessRunner->>Environment: cleanup()
+
+    HarnessRunner-->>User: EvaluationResult
