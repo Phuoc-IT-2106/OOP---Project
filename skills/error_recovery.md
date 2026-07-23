@@ -1,5 +1,7 @@
 # Error Recovery Skill
 
+Keywords: error, failure, failed, recover, recovery, retry, fix, loi, that bai, sua
+
 Huong dan agent:
 
 - Neu tool tra loi loi, doc thong bao loi va thu cach sua nho nhat.

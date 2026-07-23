@@ -1,5 +1,7 @@
 # Tool Usage Skill
 
+Keywords: tool, calculator, calculate, arithmetic, file, memory, search, command, tinh, doc file, ghi file
+
 Huong dan agent:
 
 - Dung `calculator` cho bieu thuc so hoc.

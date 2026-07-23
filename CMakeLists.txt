@@ -48,6 +48,22 @@ target_link_libraries(oop_agent_tools
         SQLite::SQLite3
 )
 
+add_library(oop_agent_core
+    src/agent/agent_loop.cpp
+    src/skills/skill_loader.cpp
+)
+
+target_include_directories(oop_agent_core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(oop_agent_core
+    PUBLIC
+        oop_agent_tools
+        nlohmann_json::nlohmann_json
+)
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(oop_agent_tool_tests
@@ -55,4 +71,10 @@ if(BUILD_TESTING)
     )
     target_link_libraries(oop_agent_tool_tests PRIVATE oop_agent_tools)
     add_test(NAME oop_agent_tool_tests COMMAND oop_agent_tool_tests)
+
+    add_executable(oop_agent_core_tests
+        tests/agent_tests.cpp
+    )
+    target_link_libraries(oop_agent_core_tests PRIVATE oop_agent_core)
+    add_test(NAME oop_agent_core_tests COMMAND oop_agent_core_tests)
 endif()

@@ -1,5 +1,7 @@
 # Task Planner Skill
 
+Keywords: task, plan, planning, requirement, step, steps, ke hoach, yeu cau, buoc
+
 Huong dan agent:
 
 - Doc ky yeu cau truoc khi goi tool.
