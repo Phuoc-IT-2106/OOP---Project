@@ -1,6 +1,9 @@
 #include "memory_tool.h"
 
+#include <algorithm>
+#include <cmath>
 #include <exception>
+#include <iomanip>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -66,6 +69,10 @@ std::string formatEntries(const std::vector<MemoryEntry> &entries) {
         if (!entry.created_at.empty()) {
             output << "Created: " << entry.created_at << '\n';
         }
+        if (entry.similarity.has_value()) {
+            output << "Similarity: " << std::fixed << std::setprecision(6)
+                   << *entry.similarity << '\n';
+        }
         if (index + 1 != entries.size()) {
             output << '\n';
         }
@@ -75,16 +82,57 @@ std::string formatEntries(const std::vector<MemoryEntry> &entries) {
 
 } // namespace
 
+double cosineSimilarity(const std::vector<double> &left,
+                        const std::vector<double> &right) {
+    if (left.empty() || right.empty()) {
+        throw std::invalid_argument("cosine similarity requires non-empty vectors");
+    }
+    if (left.size() != right.size()) {
+        throw std::invalid_argument("cosine similarity requires equal vector dimensions");
+    }
+
+    // Accumulate in long double to reduce rounding error for the 768-element
+    // vectors produced by nomic-embed-text.
+    long double dot_product = 0.0L;
+    long double left_squared_norm = 0.0L;
+    long double right_squared_norm = 0.0L;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (!std::isfinite(left[index]) || !std::isfinite(right[index])) {
+            throw std::invalid_argument("cosine similarity requires finite coordinates");
+        }
+        dot_product +=
+            static_cast<long double>(left[index]) * right[index];
+        left_squared_norm +=
+            static_cast<long double>(left[index]) * left[index];
+        right_squared_norm +=
+            static_cast<long double>(right[index]) * right[index];
+    }
+
+    if (left_squared_norm == 0.0L || right_squared_norm == 0.0L) {
+        return 0.0;
+    }
+
+    const long double denominator =
+        std::sqrt(left_squared_norm) * std::sqrt(right_squared_norm);
+    const double similarity = static_cast<double>(dot_product / denominator);
+    // Floating-point rounding may produce values such as 1.0000000000000002.
+    return std::clamp(similarity, -1.0, 1.0);
+}
+
 MemorySaveTool::MemorySaveTool(std::shared_ptr<MemoryStore> store,
-                               MemoryToolConfig config)
-    : store_(std::move(store)), config_(std::move(config)) {}
+                               MemoryToolConfig config,
+                               std::shared_ptr<oop_agent::client::EmbeddingClient> embedder)
+    : store_(std::move(store)),
+      config_(std::move(config)),
+      embedder_(std::move(embedder)) {}
 
 std::string_view MemorySaveTool::name() const noexcept {
     return "memory_save";
 }
 
 std::string_view MemorySaveTool::description() const noexcept {
-    return "Save persistent memory. Arguments: content and optional comma-separated tags.";
+    return "Save persistent memory and its embedding. Arguments: content and optional "
+           "comma-separated tags.";
 }
 
 ToolResult MemorySaveTool::execute(const ToolArguments &arguments) {
@@ -113,13 +161,41 @@ ToolResult MemorySaveTool::execute(const ToolArguments &arguments) {
     }
 
     try {
-        const auto response = store_->save(content_argument->second, tags);
+        MemorySaveResponse response;
+        std::string embedding_error;
+        if (embedder_) {
+            const auto embedding_response =
+                embedder_->embed(content_argument->second);
+            if (embedding_response.success &&
+                !embedding_response.embedding.empty()) {
+                response = store_->saveWithEmbedding(content_argument->second,
+                                                     tags,
+                                                     embedding_response.embedding);
+            } else {
+                embedding_error = embedding_response.error_message.empty()
+                                      ? "embedding client returned an empty vector"
+                                      : embedding_response.error_message;
+                if (!config_.save_without_embedding_on_failure) {
+                    return ToolResult::failed("memory embedding failed: " +
+                                              embedding_error);
+                }
+                response = store_->save(content_argument->second, tags);
+            }
+        } else {
+            response = store_->save(content_argument->second, tags);
+        }
+
         if (!response.success) {
             return ToolResult::failed(response.error_message.empty()
                                           ? "memory store could not save the entry"
                                           : response.error_message);
         }
-        return ToolResult::ok("Saved memory with id " + std::to_string(response.id) + ".");
+        std::string output =
+            "Saved memory with id " + std::to_string(response.id) + ".";
+        if (!embedding_error.empty()) {
+            output += " Embedding unavailable; saved for keyword search only.";
+        }
+        return ToolResult::ok(std::move(output));
     } catch (const std::exception &error) {
         return ToolResult::failed(std::string("memory save failed: ") + error.what());
     } catch (...) {
@@ -128,15 +204,19 @@ ToolResult MemorySaveTool::execute(const ToolArguments &arguments) {
 }
 
 MemorySearchTool::MemorySearchTool(std::shared_ptr<MemoryStore> store,
-                                   MemoryToolConfig config)
-    : store_(std::move(store)), config_(std::move(config)) {}
+                                   MemoryToolConfig config,
+                                   std::shared_ptr<oop_agent::client::EmbeddingClient> embedder)
+    : store_(std::move(store)),
+      config_(std::move(config)),
+      embedder_(std::move(embedder)) {}
 
 std::string_view MemorySearchTool::name() const noexcept {
     return "memory_search";
 }
 
 std::string_view MemorySearchTool::description() const noexcept {
-    return "Search persistent memory by content or tags. Arguments: query and optional limit.";
+    return "Search persistent memory by cosine similarity with keyword fallback. "
+           "Arguments: query and optional limit.";
 }
 
 ToolResult MemorySearchTool::execute(const ToolArguments &arguments) {
@@ -163,7 +243,32 @@ ToolResult MemorySearchTool::execute(const ToolArguments &arguments) {
     }
 
     try {
-        const auto response = store_->search(query_argument->second, limit);
+        MemorySearchResponse response;
+        if (embedder_) {
+            const auto embedding_response =
+                embedder_->embed(query_argument->second);
+            if (embedding_response.success &&
+                !embedding_response.embedding.empty()) {
+                response =
+                    store_->searchSimilar(embedding_response.embedding, limit);
+            } else {
+                response.error_message =
+                    embedding_response.error_message.empty()
+                        ? "embedding client returned an empty vector"
+                        : embedding_response.error_message;
+            }
+
+            // An empty semantic result also triggers keyword fallback. This
+            // keeps databases created before the embedding migration useful.
+            const bool semantic_unavailable =
+                !response.success || response.entries.empty();
+            if (semantic_unavailable && config_.fallback_to_keyword_search) {
+                response = store_->search(query_argument->second, limit);
+            }
+        } else {
+            response = store_->search(query_argument->second, limit);
+        }
+
         if (!response.success) {
             return ToolResult::failed(response.error_message.empty()
                                           ? "memory store could not search entries"

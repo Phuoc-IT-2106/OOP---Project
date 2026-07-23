@@ -1,11 +1,16 @@
 #include "memory_tool.h"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <iomanip>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <sqlite3.h>
 
@@ -36,6 +41,20 @@ std::string sqliteError(sqlite3 *database, const std::string &prefix) {
                                                 : sqlite3_errmsg(database));
 }
 
+void executeSql(sqlite3 *database,
+                const char *sql,
+                const std::string &error_prefix) {
+    char *raw_error = nullptr;
+    const int status =
+        sqlite3_exec(database, sql, nullptr, nullptr, &raw_error);
+    if (status != SQLITE_OK) {
+        const std::string message =
+            raw_error == nullptr ? sqlite3_errmsg(database) : raw_error;
+        sqlite3_free(raw_error);
+        throw std::runtime_error(error_prefix + ": " + message);
+    }
+}
+
 Database openDatabase(const MemoryToolConfig &config) {
     const auto parent = config.database_path.parent_path();
     if (!parent.empty()) {
@@ -57,6 +76,9 @@ Database openDatabase(const MemoryToolConfig &config) {
         throw std::runtime_error(
             sqliteError(database.get(), "could not configure SQLite busy timeout"));
     }
+    executeSql(database.get(),
+               "PRAGMA foreign_keys = ON;",
+               "could not enable SQLite foreign keys");
     return database;
 }
 
@@ -69,15 +91,17 @@ void executeSchema(sqlite3 *database) {
         "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
         ");"
         "CREATE INDEX IF NOT EXISTS idx_memories_created_at "
-        "ON memories(created_at DESC);";
+        "ON memories(created_at DESC);"
+        "CREATE TABLE IF NOT EXISTS memory_embeddings ("
+        "memory_id INTEGER PRIMARY KEY,"
+        "vector TEXT NOT NULL,"
+        "dimensions INTEGER NOT NULL CHECK(dimensions > 0),"
+        "FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE"
+        ");";
 
-    char *raw_error = nullptr;
-    const int status = sqlite3_exec(database, schema, nullptr, nullptr, &raw_error);
-    if (status != SQLITE_OK) {
-        const std::string message = raw_error == nullptr ? sqlite3_errmsg(database) : raw_error;
-        sqlite3_free(raw_error);
-        throw std::runtime_error("could not initialize memory schema: " + message);
-    }
+    executeSql(database,
+               schema,
+               "could not initialize memory schema");
 }
 
 Statement prepare(sqlite3 *database, const char *sql) {
@@ -129,6 +153,86 @@ std::string escapeLikePattern(const std::string &query) {
     return "%" + escaped + "%";
 }
 
+std::string serializeEmbedding(const std::vector<double> &embedding) {
+    if (embedding.empty()) {
+        throw std::invalid_argument("embedding vector must not be empty");
+    }
+
+    // Text storage is portable and easy to inspect during the course demo.
+    // max_digits10 preserves enough precision for a double round trip.
+    std::ostringstream output;
+    output << std::setprecision(std::numeric_limits<double>::max_digits10);
+    for (std::size_t index = 0; index < embedding.size(); ++index) {
+        if (!std::isfinite(embedding[index])) {
+            throw std::invalid_argument(
+                "embedding vector contains a non-finite coordinate");
+        }
+        if (index != 0) {
+            output << ',';
+        }
+        output << embedding[index];
+    }
+    return output.str();
+}
+
+std::vector<double> deserializeEmbedding(const std::string &serialized,
+                                         std::size_t expected_dimensions) {
+    if (serialized.empty() || serialized.back() == ',') {
+        throw std::runtime_error("stored embedding vector is malformed");
+    }
+
+    std::vector<double> embedding;
+    embedding.reserve(expected_dimensions);
+    std::istringstream input(serialized);
+    std::string coordinate_text;
+    while (std::getline(input, coordinate_text, ',')) {
+        if (coordinate_text.empty()) {
+            throw std::runtime_error("stored embedding vector is malformed");
+        }
+        std::size_t parsed_characters = 0;
+        const double coordinate =
+            std::stod(coordinate_text, &parsed_characters);
+        if (parsed_characters != coordinate_text.size() ||
+            !std::isfinite(coordinate)) {
+            throw std::runtime_error("stored embedding coordinate is invalid");
+        }
+        embedding.push_back(coordinate);
+    }
+    if (embedding.size() != expected_dimensions) {
+        throw std::runtime_error("stored embedding dimension does not match metadata");
+    }
+    return embedding;
+}
+
+class Transaction {
+  public:
+    explicit Transaction(sqlite3 *database) : database_(database) {
+        executeSql(database_,
+                   "BEGIN IMMEDIATE;",
+                   "could not begin memory transaction");
+    }
+
+    Transaction(const Transaction &) = delete;
+    Transaction &operator=(const Transaction &) = delete;
+
+    ~Transaction() {
+        if (active_) {
+            sqlite3_exec(database_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        }
+    }
+
+    void commit() {
+        executeSql(database_,
+                   "COMMIT;",
+                   "could not commit memory transaction");
+        active_ = false;
+    }
+
+  private:
+    sqlite3 *database_;
+    bool active_{true};
+};
+
 } // namespace
 
 SqliteMemoryStore::SqliteMemoryStore(MemoryToolConfig config)
@@ -160,6 +264,65 @@ MemorySaveResponse SqliteMemoryStore::save(const std::string &content,
     }
 }
 
+MemorySaveResponse SqliteMemoryStore::saveWithEmbedding(
+    const std::string &content,
+    const std::string &tags,
+    const std::vector<double> &embedding) {
+    try {
+        const std::string serialized_embedding =
+            serializeEmbedding(embedding);
+        if (embedding.size() >
+            static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            return {false, 0, "embedding dimension is too large for SQLite"};
+        }
+
+        auto database = openDatabase(config_);
+        Transaction transaction(database.get());
+
+        auto memory_statement = prepare(
+            database.get(),
+            "INSERT INTO memories(content, tags) VALUES(?1, ?2);");
+        bindText(database.get(), memory_statement.get(), 1, content);
+        bindText(database.get(), memory_statement.get(), 2, tags);
+        if (sqlite3_step(memory_statement.get()) != SQLITE_DONE) {
+            return {false,
+                    0,
+                    sqliteError(database.get(), "could not save memory")};
+        }
+        const std::int64_t memory_id =
+            sqlite3_last_insert_rowid(database.get());
+
+        auto embedding_statement = prepare(
+            database.get(),
+            "INSERT INTO memory_embeddings(memory_id, vector, dimensions) "
+            "VALUES(?1, ?2, ?3);");
+        if (sqlite3_bind_int64(embedding_statement.get(), 1, memory_id) !=
+            SQLITE_OK) {
+            return {false, 0, "could not bind memory embedding id"};
+        }
+        bindText(database.get(),
+                 embedding_statement.get(),
+                 2,
+                 serialized_embedding);
+        if (sqlite3_bind_int(embedding_statement.get(),
+                             3,
+                             static_cast<int>(embedding.size())) != SQLITE_OK) {
+            return {false, 0, "could not bind memory embedding dimensions"};
+        }
+        if (sqlite3_step(embedding_statement.get()) != SQLITE_DONE) {
+            return {false,
+                    0,
+                    sqliteError(database.get(),
+                                "could not save memory embedding")};
+        }
+
+        transaction.commit();
+        return {true, memory_id, {}};
+    } catch (const std::exception &error) {
+        return {false, 0, error.what()};
+    }
+}
+
 MemorySearchResponse SqliteMemoryStore::search(const std::string &query,
                                                std::size_t limit) const {
     try {
@@ -183,10 +346,83 @@ MemorySearchResponse SqliteMemoryStore::search(const std::string &query,
             response.entries.push_back({sqlite3_column_int64(statement.get(), 0),
                                         columnText(statement.get(), 1),
                                         columnText(statement.get(), 2),
-                                        columnText(statement.get(), 3)});
+                                        columnText(statement.get(), 3),
+                                        std::nullopt});
         }
         if (status != SQLITE_DONE) {
             return {false, {}, sqliteError(database.get(), "could not search memory")};
+        }
+        return response;
+    } catch (const std::exception &error) {
+        return {false, {}, error.what()};
+    }
+}
+
+MemorySearchResponse SqliteMemoryStore::searchSimilar(
+    const std::vector<double> &query_embedding,
+    std::size_t limit) const {
+    try {
+        if (limit == 0) {
+            return {false, {}, "memory similarity search limit must be positive"};
+        }
+        // Validate dimensions and coordinates before opening the database.
+        (void)cosineSimilarity(query_embedding, query_embedding);
+
+        auto database = openDatabase(config_);
+        auto statement = prepare(
+            database.get(),
+            "SELECT m.id, m.content, m.tags, m.created_at, "
+            "e.vector, e.dimensions "
+            "FROM memories AS m "
+            "INNER JOIN memory_embeddings AS e ON e.memory_id = m.id;");
+
+        MemorySearchResponse response;
+        response.success = true;
+        int status = SQLITE_ROW;
+        while ((status = sqlite3_step(statement.get())) == SQLITE_ROW) {
+            const auto raw_dimensions =
+                sqlite3_column_int64(statement.get(), 5);
+            if (raw_dimensions <= 0 ||
+                static_cast<std::uint64_t>(raw_dimensions) >
+                    std::numeric_limits<std::size_t>::max()) {
+                continue;
+            }
+
+            try {
+                const auto stored_embedding = deserializeEmbedding(
+                    columnText(statement.get(), 4),
+                    static_cast<std::size_t>(raw_dimensions));
+                const double similarity =
+                    cosineSimilarity(query_embedding, stored_embedding);
+                response.entries.push_back(
+                    {sqlite3_column_int64(statement.get(), 0),
+                     columnText(statement.get(), 1),
+                     columnText(statement.get(), 2),
+                     columnText(statement.get(), 3),
+                     similarity});
+            } catch (const std::exception &) {
+                // One corrupt or dimension-incompatible row should not make
+                // all other persistent memories unsearchable.
+            }
+        }
+        if (status != SQLITE_DONE) {
+            return {false,
+                    {},
+                    sqliteError(database.get(),
+                                "could not search memory embeddings")};
+        }
+
+        std::sort(
+            response.entries.begin(),
+            response.entries.end(),
+            [](const MemoryEntry &left, const MemoryEntry &right) {
+                if (*left.similarity == *right.similarity) {
+                    return left.id > right.id;
+                }
+                return *left.similarity > *right.similarity;
+            });
+        if (response.entries.size() > limit) {
+            response.entries.resize(limit);
         }
         return response;
     } catch (const std::exception &error) {

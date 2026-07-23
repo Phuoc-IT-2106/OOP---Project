@@ -62,11 +62,15 @@ registry.registerFactory("web_search", [search] {
 oop_agent::tools::MemoryToolConfig memory_config;
 memory_config.database_path = "data/memory.sqlite3";
 auto memory_store = oop_agent::tools::makeSqliteMemoryStore(memory_config);
-registry.registerFactory("memory_save", [memory_store, memory_config] {
-    return std::make_unique<oop_agent::tools::MemorySaveTool>(memory_store, memory_config);
+auto embedder =
+    std::make_shared<oop_agent::client::OllamaEmbeddingClient>();
+registry.registerFactory("memory_save", [memory_store, memory_config, embedder] {
+    return std::make_unique<oop_agent::tools::MemorySaveTool>(
+        memory_store, memory_config, embedder);
 });
-registry.registerFactory("memory_search", [memory_store, memory_config] {
-    return std::make_unique<oop_agent::tools::MemorySearchTool>(memory_store, memory_config);
+registry.registerFactory("memory_search", [memory_store, memory_config, embedder] {
+    return std::make_unique<oop_agent::tools::MemorySearchTool>(
+        memory_store, memory_config, embedder);
 });
 
 // Deny-list luon duoc uu tien hon allow-list.
@@ -85,7 +89,7 @@ Contract argument hien tai:
 
 File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 MiB.
 `WebSearchTool` goi `GET /search` cua SearXNG voi `format=json`. SearXNG instance can bat JSON format; neu bi tat, server co the tra ve HTTP 403.
-Memory duoc luu ben vung trong SQLite. `memory_search` tim keyword literal trong ca noi dung va tags, uu tien memory moi nhat.
+Memory duoc luu ben vung trong SQLite. Embedding nam trong bang `memory_embeddings`, lien ket mot-mot voi `memories`. `memory_search` embed query, tinh cosine similarity trong C++ va sap xep giam dan. Neu embedding client loi hoac database cu chua co vector, tool tu dong fallback sang keyword search trong content/tags. Co the tat fallback bang `memory_config.fallback_to_keyword_search = false`.
 
 ## Embedding voi Ollama
 

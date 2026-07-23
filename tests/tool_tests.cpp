@@ -1,3 +1,4 @@
+#include "client/embedding_client.h"
 #include "client/llm_client.h"
 #include "harness/evaluator.h"
 #include "tools/calculator_tool.h"
@@ -7,8 +8,11 @@
 #include "tools/tool_registry.h"
 #include "tools/web_search_tool.h"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -28,6 +32,7 @@ using oop_agent::tools::MemorySearchResponse;
 using oop_agent::tools::MemorySearchTool;
 using oop_agent::tools::MemoryStore;
 using oop_agent::tools::MemoryToolConfig;
+using oop_agent::tools::cosineSimilarity;
 using oop_agent::tools::makeSqliteMemoryStore;
 using oop_agent::tools::ToolRegistry;
 using oop_agent::tools::WriteFileTool;
@@ -215,7 +220,19 @@ class InMemoryStore final : public MemoryStore {
   public:
     MemorySaveResponse save(const std::string &content,
                             const std::string &tags) override {
-        entries_.push_back({next_id_, content, tags, "2026-07-14 12:00:00"});
+        entries_.push_back(
+            {next_id_, content, tags, "2026-07-14 12:00:00", std::nullopt});
+        embeddings_.push_back({});
+        return {true, next_id_++, {}};
+    }
+
+    MemorySaveResponse saveWithEmbedding(
+        const std::string &content,
+        const std::string &tags,
+        const std::vector<double> &embedding) override {
+        entries_.push_back(
+            {next_id_, content, tags, "2026-07-14 12:00:00", std::nullopt});
+        embeddings_.push_back(embedding);
         return {true, next_id_++, {}};
     }
 
@@ -234,10 +251,69 @@ class InMemoryStore final : public MemoryStore {
         return response;
     }
 
+    MemorySearchResponse searchSimilar(
+        const std::vector<double> &query_embedding,
+        std::size_t limit) const override {
+        MemorySearchResponse response;
+        response.success = true;
+        for (std::size_t index = 0; index < entries_.size(); ++index) {
+            if (embeddings_[index].empty()) {
+                continue;
+            }
+            auto entry = entries_[index];
+            entry.similarity =
+                cosineSimilarity(query_embedding, embeddings_[index]);
+            response.entries.push_back(std::move(entry));
+        }
+        std::sort(
+            response.entries.begin(),
+            response.entries.end(),
+            [](const MemoryEntry &left, const MemoryEntry &right) {
+                return *left.similarity > *right.similarity;
+            });
+        if (response.entries.size() > limit) {
+            response.entries.resize(limit);
+        }
+        return response;
+    }
+
   private:
     std::vector<MemoryEntry> entries_;
+    std::vector<std::vector<double>> embeddings_;
     std::int64_t next_id_{1};
 };
+
+class FakeEmbeddingClient final : public oop_agent::client::EmbeddingClient {
+  public:
+    std::map<std::string, std::vector<double>> vectors;
+
+    oop_agent::client::EmbeddingResponse embed(
+        const std::string &text) override {
+        const auto found = vectors.find(text);
+        if (found == vectors.end()) {
+            oop_agent::client::EmbeddingResponse response;
+            response.error_message = "fake embedding unavailable";
+            return response;
+        }
+
+        oop_agent::client::EmbeddingResponse response;
+        response.success = true;
+        response.embedding = found->second;
+        return response;
+    }
+};
+
+void testCosineSimilarity() {
+    const double identical =
+        cosineSimilarity({1.0, 2.0, 3.0}, {1.0, 2.0, 3.0});
+    expect(std::abs(identical - 1.0) < 1e-12,
+           "identical vectors should have cosine similarity near 1");
+
+    const double orthogonal =
+        cosineSimilarity({1.0, 0.0}, {0.0, 1.0});
+    expect(std::abs(orthogonal) < 1e-12,
+           "orthogonal vectors should have cosine similarity 0");
+}
 
 void testMemoryToolsThroughRegistry() {
     auto store = std::make_shared<InMemoryStore>();
@@ -277,6 +353,54 @@ void testMemoryToolsThroughRegistry() {
            "memory_search should enforce its configured limit");
 }
 
+void testSemanticMemorySearchAndKeywordFallback() {
+    auto store = std::make_shared<InMemoryStore>();
+    auto embedder = std::make_shared<FakeEmbeddingClient>();
+    embedder->vectors["Cats are small domestic animals"] = {1.0, 0.0};
+    embedder->vectors["SQLite is a relational database"] = {0.0, 1.0};
+    embedder->vectors["Tell me about kittens"] = {0.9, 0.1};
+
+    MemoryToolConfig config;
+    config.default_search_limit = 2;
+
+    MemorySaveTool save_tool(store, config, embedder);
+    expect(save_tool.execute(
+               {{"content", "Cats are small domestic animals"},
+                {"tags", "animals"}})
+               .success,
+           "memory_save should persist the content embedding");
+    expect(save_tool.execute(
+               {{"content", "SQLite is a relational database"},
+                {"tags", "database"}})
+               .success,
+           "memory_save should persist a second content embedding");
+
+    MemorySearchTool search_tool(store, config, embedder);
+    const auto semantic =
+        search_tool.execute({{"query", "Tell me about kittens"}});
+    expect(semantic.success,
+           "semantic memory search should succeed with fake embeddings");
+    const auto cat_position =
+        semantic.output.find("Cats are small domestic animals");
+    const auto sqlite_position =
+        semantic.output.find("SQLite is a relational database");
+    expect(cat_position != std::string::npos &&
+               sqlite_position != std::string::npos &&
+               cat_position < sqlite_position,
+           "semantic search should return the nearest item first");
+    expect(semantic.output.find("Similarity:") != std::string::npos,
+           "semantic result should expose its similarity score");
+
+    // The fake has no vector for this exact query. MemorySearchTool should
+    // recover with the existing literal keyword search.
+    const auto fallback =
+        search_tool.execute({{"query", "SQLite"}});
+    expect(fallback.success &&
+               fallback.output.find("SQLite is a relational database") !=
+                   std::string::npos,
+           "embedding failure should fall back to keyword search");
+}
+
 void testSqliteMemoryStorePersistence() {
     namespace fs = std::filesystem;
     const fs::path workspace = fs::current_path() / "memory-test-workspace";
@@ -297,6 +421,24 @@ void testSqliteMemoryStorePersistence() {
                found.entries.front().content == "Progress is 100% complete",
            "SQLite memory should persist and escape LIKE wildcard characters");
 
+    const auto cat = reopened_store->saveWithEmbedding(
+        "Cats are close to kittens", "animals", {1.0, 0.0});
+    const auto database = reopened_store->saveWithEmbedding(
+        "SQLite stores tables", "database", {0.0, 1.0});
+    expect(cat.success && database.success,
+           "SQLite should atomically persist memories and embeddings");
+
+    auto semantic_store = makeSqliteMemoryStore(config);
+    const auto nearest = semantic_store->searchSimilar({0.95, 0.05}, 2);
+    expect(nearest.success && nearest.entries.size() == 2 &&
+               nearest.entries.front().content == "Cats are close to kittens",
+           "persistent semantic search should return the nearest item first");
+    expect(nearest.entries[0].similarity.has_value() &&
+               nearest.entries[1].similarity.has_value() &&
+               *nearest.entries[0].similarity >
+                   *nearest.entries[1].similarity,
+           "SQLite semantic results should be sorted by decreasing similarity");
+
     fs::remove_all(workspace);
 }
 
@@ -310,7 +452,9 @@ int main() {
         testCalculatorToolThroughRegistry();
         testFileToolsThroughRegistry();
         testWebSearchToolWithInjectedTransport();
+        testCosineSimilarity();
         testMemoryToolsThroughRegistry();
+        testSemanticMemorySearchAndKeywordFallback();
         testSqliteMemoryStorePersistence();
         std::cout << "All tool tests passed\n";
         return 0;
