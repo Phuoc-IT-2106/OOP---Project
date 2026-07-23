@@ -1,8 +1,8 @@
 #pragma once
 
 #include "llm_client.h"
+#include "ollama_http_transport.h"
 
-#include <functional>
 #include <string>
 
 namespace oop_agent::client {
@@ -16,17 +16,10 @@ struct OllamaConfig {
     long timeout_seconds{60};
 };
 
-struct HttpResponse {
-    long status_code{0};
-    std::string body;
-    std::string error_message;
-};
-
 class OllamaClient final : public LLMClient {
   public:
-    using HttpTransport = std::function<HttpResponse(const std::string &url,
-                                                     const std::string &payload,
-                                                     long timeout_seconds)>;
+    // Retain this public alias for existing call sites that inject transports.
+    using HttpTransport = OllamaHttpTransport;
 
     explicit OllamaClient(OllamaConfig config);
     OllamaClient(OllamaConfig config, HttpTransport transport);
@@ -43,9 +36,5 @@ class OllamaClient final : public LLMClient {
     std::string buildPayload(const ChatRequest &request) const;
     ChatResponse parseResponse(const HttpResponse &http_response, long latency_ms) const;
 };
-
-HttpResponse defaultOllamaHttpTransport(const std::string &url,
-                                        const std::string &payload,
-                                        long timeout_seconds);
 
 } // namespace oop_agent::client

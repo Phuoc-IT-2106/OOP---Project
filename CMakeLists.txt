@@ -12,6 +12,7 @@ find_package(SQLite3 REQUIRED)
 
 add_library(oop_agent_client
     src/client/ollama_client.cpp
+    src/client/ollama_embedding_client.cpp
 )
 
 target_include_directories(oop_agent_client
@@ -66,6 +67,12 @@ target_link_libraries(oop_agent_core
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(oop_agent_client_tests
+        tests/client_tests.cpp
+    )
+    target_link_libraries(oop_agent_client_tests PRIVATE oop_agent_client)
+    add_test(NAME oop_agent_client_tests COMMAND oop_agent_client_tests)
+
     add_executable(oop_agent_tool_tests
         tests/tool_tests.cpp
     )

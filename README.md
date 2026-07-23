@@ -21,11 +21,11 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. Cac interface `Tool`, `LLMClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `CalculatorTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. `OllamaEmbeddingClient` goi `/api/embed` voi model mac dinh `nomic-embed-text` va tra ve `std::vector<double>`. Cac interface `Tool`, `LLMClient`, `EmbeddingClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `CalculatorTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
 
 ## Module chinh
 
-- `src/client`: `LLMClient`, `OllamaClient`.
+- `src/client`: `LLMClient`, `OllamaClient`, `EmbeddingClient`, `OllamaEmbeddingClient`.
 - `src/tools`: `Tool`, `ToolRegistry`, 5 tool bat buoc va 3 tool mo rong.
 - `src/skills`: `SkillLoader`.
 - `src/agent`: `AgentLoop`, `LoopDetector`.
@@ -87,9 +87,29 @@ File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 
 `WebSearchTool` goi `GET /search` cua SearXNG voi `format=json`. SearXNG instance can bat JSON format; neu bi tat, server co the tra ve HTTP 403.
 Memory duoc luu ben vung trong SQLite. `memory_search` tim keyword literal trong ca noi dung va tags, uu tien memory moi nhat.
 
+## Embedding voi Ollama
+
+`EmbeddingClient` la abstraction de Persistent Memory khong phu thuoc truc tiep vao Ollama. Client mac dinh dung API hien hanh `/api/embed`:
+
+```cpp
+oop_agent::client::OllamaEmbeddingConfig config;
+config.base_url = "http://localhost:11434";
+config.endpoint = "/api/embed";
+config.model_name = "nomic-embed-text";
+config.timeout_seconds = 30;
+
+oop_agent::client::OllamaEmbeddingClient embedder(config);
+const auto result = embedder.embed("Noi dung can tao vector");
+if (result.success) {
+    const std::vector<double> &vector = result.embedding;
+}
+```
+
+Can tai model mot lan truoc khi chay that: `ollama pull nomic-embed-text`. Unit test cua client dung fake HTTP transport, nen khong can Ollama hay model that.
+
 ## Dependencies
 
-Module `OllamaClient` va `WebSearchTool` dung `libcurl` de gui HTTP request va `nlohmann/json` de xu ly JSON. Hai memory tool dung SQLite3.
+Module `OllamaClient`, `OllamaEmbeddingClient` va `WebSearchTool` dung `libcurl` de gui HTTP request va `nlohmann/json` de xu ly JSON. Hai memory tool dung SQLite3.
 
 Tren MSYS2 CLANG64 co the cai bang:
 
