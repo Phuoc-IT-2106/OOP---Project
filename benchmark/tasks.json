@@ -4,7 +4,7 @@
     "description": "Tinh 15 * 17 va luu ket qua vao file result.txt",
     "instruction": "Tinh 15 nhan 17. Luu ket qua vao file result.txt",
     "eval_type": "functional",
-    "eval_script": "placeholder",
+    "eval_script": "test -f result.txt && grep -q 255 result.txt",
     "max_steps": 10
   },
   {
@@ -36,7 +36,7 @@
     "description": "Tinh toan roi ghi file",
     "instruction": "Tinh (42 + 18) / 3 va ghi ket qua vao output/calc.txt",
     "eval_type": "functional",
-    "eval_script": "placeholder",
+    "eval_script": "test -f output/calc.txt && grep -q 20 output/calc.txt",
     "max_steps": 10
   },
   {
@@ -68,7 +68,7 @@
     "description": "Multi-step voi tinh toan, file va memory",
     "instruction": "Tinh 15 * 17, ghi vao result.txt, sau do luu ket qua vao memory voi key multiply_result",
     "eval_type": "functional",
-    "eval_script": "placeholder",
+    "eval_script": ""eval_script": "test -f result.txt && grep -q 255 result.txt"",
     "max_steps": 15
   },
   {
@@ -76,7 +76,7 @@
     "description": "Task kho can tu quyet dinh thu tu tool",
     "instruction": "Kiem tra workspace co README.md khong, doc file neu co, dem so tu va ghi tom tat vao summary.txt",
     "eval_type": "functional",
-    "eval_script": "placeholder",
+    "eval_script": "test -f summary.txt && test -s summary.txt",
     "max_steps": 15
   }
 ]
