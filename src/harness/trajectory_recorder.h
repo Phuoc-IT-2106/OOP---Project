@@ -1,48 +1,26 @@
 // Placeholder: TrajectoryRecorder declaration for JSON output.
-#ifndef TRAJECTORY_RECORDER_H
-#define TRAJECTORY_RECORDER_H
-
-#include <filesystem>
-#include <fstream>
-#include <stdexcept>
-#include <string>
+#pragma once
 
 #include "trajectory.h"
 
+#include <filesystem>
+
+namespace oop_agent::harness {
+
 class TrajectoryRecorder {
-private:
-    std::filesystem::path outputDirectory;
-
-public:
+  public:
     explicit TrajectoryRecorder(
-        const std::filesystem::path& outputDirectory
-    )
-        : outputDirectory(outputDirectory) {
-        std::filesystem::create_directories(
-            outputDirectory
-        );
-    }
+        std::filesystem::path output_directory
+    );
 
-    void save(const Trajectory& trajectory) const {
-        const std::filesystem::path outputPath =
-            outputDirectory
-            / (
-                "trajectory_"
-                + trajectory.getTaskId()
-                + ".json"
-            );
+    void save(
+        const Trajectory &trajectory
+    ) const;
 
-        std::ofstream outputFile(outputPath);
-
-        if (!outputFile.is_open()) {
-            throw std::runtime_error(
-                "Khong the tao file trajectory: "
-                + outputPath.string()
-            );
-        }
-
-        outputFile << trajectory.toJson().dump(4);
-    }
+  private:
+    std::filesystem::path output_directory_;
 };
+
+} // namespace oop_agent::harness
 
 #endif
