@@ -1,115 +1,76 @@
 // Placeholder: Trajectory and Step data model declarations.
-#ifndef TRAJECTORY_H
-#define TRAJECTORY_H
+#pragma once
 
+#include "agent/agent_loop.h"
+
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
-class Step {
-private:
-    int stepId;
+namespace oop_agent::harness {
+
+struct TrajectoryStep {
+    std::size_t step_id{0};
     std::string thought;
-    nlohmann::json action;
-    std::string toolResult;
-    int tokensUsed;
-    long long latencyMs;
 
-public:
-    Step()
-        : stepId(0),
-          tokensUsed(0),
-          latencyMs(0) {
-    }
+    std::string action_type;
+    std::string tool_name;
+    nlohmann::json arguments;
 
-    Step(
-        int stepId,
-        const std::string& thought,
-        const nlohmann::json& action,
-        const std::string& toolResult,
-        int tokensUsed,
-        long long latencyMs
-    )
-        : stepId(stepId),
-          thought(thought),
-          action(action),
-          toolResult(toolResult),
-          tokensUsed(tokensUsed),
-          latencyMs(latencyMs) {
-    }
+    std::string final_answer;
+    std::string raw_response;
 
-    int getTokensUsed() const {
-        return tokensUsed;
-    }
+    std::int64_t tokens_used{0};
+    long latency_ms{0};
 
-    nlohmann::json toJson() const {
-        return {
-            {"step_id", stepId},
-            {"thought", thought},
-            {"action", action},
-            {"tool_result", toolResult},
-            {"tokens_used", tokensUsed},
-            {"latency_ms", latencyMs}
-        };
-    }
+    nlohmann::json toJson() const;
 };
 
 class Trajectory {
-private:
-    std::string taskId;
-    std::string model;
-    bool success;
-    int totalTokens;
-    long long totalTimeMs;
-    std::vector<Step> steps;
-
-public:
+  public:
     Trajectory(
-        const std::string& taskId,
-        const std::string& model
-    )
-        : taskId(taskId),
-          model(model),
-          success(false),
-          totalTokens(0),
-          totalTimeMs(0) {
-    }
+        std::string task_id,
+        std::string model
+    );
 
-    void addStep(const Step& step) {
-        steps.push_back(step);
-        totalTokens += step.getTokensUsed();
-    }
+    void addStep(
+        const agent::AgentStep &agent_step
+    );
 
-    void setSuccess(bool success) {
-        this->success = success;
-    }
+    void setResult(
+        const agent::AgentRunResult &result
+    );
 
-    void setTotalTimeMs(long long totalTimeMs) {
-        this->totalTimeMs = totalTimeMs;
-    }
+    void setEvaluation(
+        bool passed,
+        double score,
+        std::string feedback
+    );
 
-    const std::string& getTaskId() const {
-        return taskId;
-    }
+    const std::string &taskId() const noexcept;
 
-    nlohmann::json toJson() const {
-        nlohmann::json stepArray =
-            nlohmann::json::array();
+    nlohmann::json toJson() const;
 
-        for (const Step& step : steps) {
-            stepArray.push_back(step.toJson());
-        }
+  private:
+    std::string task_id_;
+    std::string model_;
 
-        return {
-            {"task_id", taskId},
-            {"model", model},
-            {"success", success},
-            {"total_tokens", totalTokens},
-            {"total_time_ms", totalTimeMs},
-            {"steps", stepArray}
-        };
-    }
+    bool agent_success_{false};
+    bool evaluation_passed_{false};
+
+    double evaluation_score_{0.0};
+    std::string evaluation_feedback_;
+
+    std::string final_answer_;
+    std::string error_message_;
+
+    std::size_t steps_taken_{0};
+    std::int64_t total_tokens_{0};
+    std::int64_t total_time_ms_{0};
+
+    std::vector<TrajectoryStep> steps_;
 };
 
-#endif
+} // namespace oop_agent::harness
