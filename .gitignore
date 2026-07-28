@@ -9,6 +9,8 @@ lib/
 data/
 logs/
 trajectories/
+benchmark/results/
+benchmark/runtime_workspace/
 *.db
 *.sqlite
 *.sqlite3

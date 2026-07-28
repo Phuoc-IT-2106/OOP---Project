@@ -69,6 +69,7 @@ class AgentLoop {
     AgentLoop &operator=(const AgentLoop &) = delete;
 
     void setStepHook(StepHook hook);
+    void setMaxSteps(std::size_t max_steps);
 
     // Template Method: run owns the fixed ReAct skeleton while subclasses may
     // customize the Think, Act, and Observe phases below.

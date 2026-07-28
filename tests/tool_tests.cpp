@@ -4,13 +4,17 @@
 #include "tools/calculator_tool.h"
 #include "tools/exec_tool.h"
 #include "tools/file_tool.h"
+#include "tools/list_directory_tool.h"
 #include "tools/memory_tool.h"
+#include "tools/text_stats_tool.h"
+#include "tools/time_tool.h"
 #include "tools/tool_registry.h"
 #include "tools/web_search_tool.h"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -24,6 +28,8 @@ namespace {
 using oop_agent::tools::ExecTool;
 using oop_agent::tools::CalculatorTool;
 using oop_agent::tools::FileToolConfig;
+using oop_agent::tools::ListDirectoryConfig;
+using oop_agent::tools::ListDirectoryTool;
 using oop_agent::tools::ReadFileTool;
 using oop_agent::tools::MemoryEntry;
 using oop_agent::tools::MemorySaveResponse;
@@ -35,6 +41,8 @@ using oop_agent::tools::MemoryToolConfig;
 using oop_agent::tools::cosineSimilarity;
 using oop_agent::tools::makeSqliteMemoryStore;
 using oop_agent::tools::ToolRegistry;
+using oop_agent::tools::TextStatsTool;
+using oop_agent::tools::TimeTool;
 using oop_agent::tools::WriteFileTool;
 using oop_agent::tools::WebSearchConfig;
 using oop_agent::tools::WebSearchRequest;
@@ -161,6 +169,41 @@ void testFileToolsThroughRegistry() {
     const auto traversal = registry.execute(
         "write_file", {{"path", "../outside.txt"}, {"content", "blocked"}});
     expect(!traversal.success, "write_file should block paths outside workspace root");
+
+    fs::remove_all(workspace);
+}
+
+void testBenchmarkSupportTools() {
+    namespace fs = std::filesystem;
+    const fs::path workspace =
+        fs::current_path() / "benchmark-tool-test-workspace";
+    fs::remove_all(workspace);
+    fs::create_directories(workspace / "nested");
+    std::ofstream(workspace / "notes.txt") << "one two\nthree\n";
+
+    ListDirectoryConfig list_config;
+    list_config.root_directory = workspace;
+    ListDirectoryTool list_tool(list_config);
+    const auto listing = list_tool.execute({});
+    expect(listing.success &&
+               listing.output.find("notes.txt") != std::string::npos &&
+               listing.output.find("nested") != std::string::npos,
+           "list_directory should list files and directories in its root");
+    expect(!list_tool.execute({{"path", "../"}}).success,
+           "list_directory should block paths outside its root");
+
+    TextStatsTool stats_tool;
+    const auto stats =
+        stats_tool.execute({{"text", "one two\nthree\n"}});
+    expect(stats.success &&
+               stats.output.find("lines=2") != std::string::npos &&
+               stats.output.find("words=3") != std::string::npos,
+           "text_stats should count lines and words");
+
+    TimeTool time_tool;
+    const auto current_time = time_tool.execute({});
+    expect(current_time.success && current_time.output.size() == 19,
+           "time should return a local ISO-8601 timestamp");
 
     fs::remove_all(workspace);
 }
@@ -451,6 +494,7 @@ int main() {
         testExecTool();
         testCalculatorToolThroughRegistry();
         testFileToolsThroughRegistry();
+        testBenchmarkSupportTools();
         testWebSearchToolWithInjectedTransport();
         testCosineSimilarity();
         testMemoryToolsThroughRegistry();

@@ -125,6 +125,13 @@ void AgentLoop::setStepHook(StepHook hook) {
     step_hook_ = std::move(hook);
 }
 
+void AgentLoop::setMaxSteps(std::size_t max_steps) {
+    if (max_steps == 0) {
+        throw std::invalid_argument("AgentLoop max_steps must be greater than zero");
+    }
+    config_.max_steps = max_steps;
+}
+
 AgentRunResult AgentLoop::run(const std::string &task) {
     if (isBlank(task)) {
         return failureResult("task must not be empty", 0, 0, 0, {}, {});

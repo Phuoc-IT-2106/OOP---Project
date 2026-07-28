@@ -1,149 +1,74 @@
-// Placeholder: HarnessRunner declaration for setup, run, evaluate, and record.
-#ifndef HARNESS_RUNNER_H
-#define HARNESS_RUNNER_H
+#pragma once
 
+#include "agent/agent_loop.h"
+#include "benchmark_task.h"
+#include "environment.h"
+#include "evaluator.h"
+#include "trajectory_recorder.h"
+
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "../agent/agent_loop.h"
-#include "../environment/environment.h"
-#include "benchmark_task.h"
-#include "evaluator.h"
-#include "trajectory_recorder.h"
+#include <nlohmann/json.hpp>
 
-class TaskResult {
-private:
-    std::string taskId;
+namespace oop_agent::harness {
+
+struct TaskResult {
+    std::string task_id;
+    bool agent_success{false};
     EvaluationResult evaluation;
-    long long totalTimeMs;
+    std::int64_t total_time_ms{0};
+    std::string agent_error;
 
-public:
-    TaskResult(
-        const std::string& taskId,
-        const EvaluationResult& evaluation,
-        long long totalTimeMs
-    )
-        : taskId(taskId),
-          evaluation(evaluation),
-          totalTimeMs(totalTimeMs) {
-    }
-
-    const std::string& getTaskId() const {
-        return taskId;
-    }
-
-    const EvaluationResult& getEvaluation() const {
-        return evaluation;
-    }
-
-    nlohmann::json toJson() const {
-        return {
-            {"task_id", taskId},
-            {"success", evaluation.isSuccess()},
-            {"score", evaluation.getScore()},
-            {"message", evaluation.getMessage()},
-            {"total_time_ms", totalTimeMs}
-        };
-    }
+    nlohmann::json toJson() const;
 };
 
 class BatchResult {
-private:
-    int totalTasks;
-    int passedTasks;
-    int failedTasks;
-    std::vector<TaskResult> taskResults;
+  public:
+    void add(TaskResult result);
 
-public:
-    BatchResult()
-        : totalTasks(0),
-          passedTasks(0),
-          failedTasks(0) {
-    }
+    std::size_t totalTasks() const noexcept;
+    std::size_t passedTasks() const noexcept;
+    std::size_t failedTasks() const noexcept;
+    double successRate() const noexcept;
+    const std::vector<TaskResult> &results() const noexcept;
+    nlohmann::json toJson() const;
 
-    void addResult(const TaskResult& result) {
-        taskResults.push_back(result);
-        totalTasks++;
-
-        if (result.getEvaluation().isSuccess()) {
-            passedTasks++;
-        }
-        else {
-            failedTasks++;
-        }
-    }
-
-    double getSuccessRate() const {
-        if (totalTasks == 0) {
-            return 0.0;
-        }
-
-        return static_cast<double>(passedTasks)
-            / static_cast<double>(totalTasks)
-            * 100.0;
-    }
-
-    nlohmann::json toJson() const {
-        nlohmann::json resultArray =
-            nlohmann::json::array();
-
-        for (const TaskResult& result : taskResults) {
-            resultArray.push_back(result.toJson());
-        }
-
-        return {
-            {"total_tasks", totalTasks},
-            {"passed_tasks", passedTasks},
-            {"failed_tasks", failedTasks},
-            {"success_rate", getSuccessRate()},
-            {"results", resultArray}
-        };
-    }
+  private:
+    std::vector<TaskResult> results_;
+    std::size_t passed_tasks_{0};
 };
 
 class HarnessRunner {
-private:
-    AgentLoop& agentLoop;
-    Environment& environment;
-    TrajectoryRecorder trajectoryRecorder;
+  public:
+    HarnessRunner(agent::AgentLoop &agent_loop,
+                  Environment &environment,
+                  std::filesystem::path result_directory,
+                  std::string model_name);
 
-    std::map<
-        std::string,
-        std::unique_ptr<Evaluator>
-    > evaluators;
+    void registerEvaluator(std::unique_ptr<Evaluator> evaluator);
 
-    std::filesystem::path resultDirectory;
+    TaskResult runTask(const BenchmarkTask &task);
+    BatchResult runBatch(const std::vector<BenchmarkTask> &tasks);
 
-    Evaluator& findEvaluator(
-        const std::string& evaluationType
-    );
+  private:
+    Evaluator &findEvaluator(const std::string &evaluation_type);
+    EvaluationInput makeEvaluationInput(
+        const BenchmarkTask &task,
+        const agent::AgentRunResult &agent_result) const;
+    void saveBatchResult(const BatchResult &batch_result) const;
 
-    void saveBatchResult(
-        const BatchResult& batchResult
-    ) const;
-
-public:
-    HarnessRunner(
-        AgentLoop& agentLoop,
-        Environment& environment,
-        const std::filesystem::path& resultDirectory
-    );
-
-    void registerEvaluator(
-        const std::string& evaluationType,
-        std::unique_ptr<Evaluator> evaluator
-    );
-
-    TaskResult runTask(
-        const BenchmarkTask& task
-    );
-
-    BatchResult runBatch(
-        const std::vector<BenchmarkTask>& tasks
-    );
+    agent::AgentLoop &agent_loop_;
+    Environment &environment_;
+    TrajectoryRecorder trajectory_recorder_;
+    std::filesystem::path result_directory_;
+    std::string model_name_;
+    std::map<std::string, std::unique_ptr<Evaluator>> evaluators_;
 };
 
-#endif
+} // namespace oop_agent::harness

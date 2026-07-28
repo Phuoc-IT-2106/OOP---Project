@@ -1,4 +1,3 @@
-// Placeholder: FunctionalEvaluator declaration.
 #pragma once
 
 #include "evaluator.h"

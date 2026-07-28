@@ -1,4 +1,3 @@
-// Placeholder: TrajectoryRecorder declaration for JSON output.
 #pragma once
 
 #include "trajectory.h"
@@ -22,5 +21,3 @@ class TrajectoryRecorder {
 };
 
 } // namespace oop_agent::harness
-
-#endif

@@ -1,4 +1,3 @@
-// Placeholder: TrajectoryRecorder implementation.
 #include "trajectory_recorder.h"
 
 #include <fstream>

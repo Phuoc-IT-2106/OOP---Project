@@ -21,7 +21,7 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. `OllamaEmbeddingClient` goi `/api/embed` voi model mac dinh `nomic-embed-text` va tra ve `std::vector<double>`. Cac interface `Tool`, `LLMClient`, `EmbeddingClient`, `Evaluator`, `ToolRegistry`, `ExecTool`, `ReadFileTool`, `WriteFileTool`, `CalculatorTool`, `WebSearchTool`, `MemorySaveTool` va `MemorySearchTool` da san sang de tich hop vao `AgentLoop`.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. `OllamaEmbeddingClient` goi `/api/embed` voi model mac dinh `nomic-embed-text` va tra ve `std::vector<double>`. Cac interface, tool, AgentLoop va benchmark Harness da san sang de chay tap 10 task tu dong.
 
 ## Module chinh
 
@@ -86,6 +86,9 @@ Contract argument hien tai:
 - `web_search`: `query` va `max_results` tuy chon (mac dinh 5, toi da 10).
 - `memory_save`: `content` va `tags` tuy chon.
 - `memory_search`: `query` va `limit` tuy chon (mac dinh 5, toi da 20).
+- `time`: khong co argument.
+- `list_directory`: `path` va `max_entries` tuy chon.
+- `text_stats`: `text`.
 
 File tool mac dinh chan duong dan thoat khoi `root_directory` va gioi han doc 1 MiB.
 `WebSearchTool` goi `GET /search` cua SearXNG voi `format=json`. SearXNG instance can bat JSON format; neu bi tat, server co the tra ve HTTP 403.
@@ -128,6 +131,44 @@ cd /c/OOP\ -\ Project/OOP---Project
 cmake -S . -B build
 cmake --build build
 ```
+
+## Chay benchmark 10 task
+
+Chuan bi Ollama:
+
+```bash
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+```
+
+Chay toan bo benchmark:
+
+```bash
+./build/oop_agent_benchmark
+```
+
+Runner tu dong:
+
+1. Doc va validate dung 10 task trong `benchmark/tasks.json`.
+2. Tao workspace sach tai `benchmark/runtime_workspace`.
+3. Dang ky tat ca tool, KeywordEvaluator va FunctionalEvaluator.
+4. Chay tung task voi `max_steps` rieng.
+5. Ghi `trajectory_<task_id>.json` cho moi task.
+6. Ghi success rate tong hop vao `benchmark/results/benchmark_summary.json`.
+
+Tuy chinh backend:
+
+```bash
+./build/oop_agent_benchmark \
+  --ollama-url http://localhost:11434 \
+  --model qwen2.5:7b \
+  --embedding-model nomic-embed-text \
+  --searxng-url http://localhost:8080
+```
+
+Dung `./build/oop_agent_benchmark --help` de xem tat ca tuy chon. SearXNG
+khong bat buoc cho 10 task hien tai, nhung `web_search` van duoc dang ky de
+demo ToolRegistry day du.
 
 ## Git theo doi dong gop
 

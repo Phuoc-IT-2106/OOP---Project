@@ -4,13 +4,13 @@
     "description": "Tinh 15 * 17 va luu ket qua vao file result.txt",
     "instruction": "Tinh 15 nhan 17. Luu ket qua vao file result.txt",
     "eval_type": "functional",
-    "eval_script": "test -f result.txt && grep -q 255 result.txt",
+    "eval_script": "file_contains|result.txt|255",
     "max_steps": 10
   },
   {
     "id": "task_002",
     "description": "Doc file input.txt va dem so dong",
-    "instruction": "Doc file input.txt va cho biet so dong",
+    "instruction": "Doc file input.txt, dem so dong va tra loi kem tu khoa 'lines'",
     "eval_type": "keyword",
     "expected_keywords": ["lines"],
     "max_steps": 8
@@ -18,7 +18,7 @@
   {
     "id": "task_003",
     "description": "Lay thoi gian hien tai",
-    "instruction": "Dung tool phu hop de lay thoi gian hien tai va tra loi theo dinh dang ngan gon",
+    "instruction": "Dung tool time de lay thoi gian hien tai va tra loi kem tu khoa 'time'",
     "eval_type": "keyword",
     "expected_keywords": ["time"],
     "max_steps": 5
@@ -36,13 +36,13 @@
     "description": "Tinh toan roi ghi file",
     "instruction": "Tinh (42 + 18) / 3 va ghi ket qua vao output/calc.txt",
     "eval_type": "functional",
-    "eval_script": "test -f output/calc.txt && grep -q 20 output/calc.txt",
+    "eval_script": "file_contains|output/calc.txt|20",
     "max_steps": 10
   },
   {
     "id": "task_006",
     "description": "Doc file roi thong ke van ban",
-    "instruction": "Doc file notes.txt, dem so dong va so tu, sau do tra loi tom tat",
+    "instruction": "Doc file notes.txt, dung text_stats de dem so dong va so tu; tra loi kem cac tu khoa 'words' va 'lines'",
     "eval_type": "keyword",
     "expected_keywords": ["words", "lines"],
     "max_steps": 10
@@ -68,7 +68,7 @@
     "description": "Multi-step voi tinh toan, file va memory",
     "instruction": "Tinh 15 * 17, ghi vao result.txt, sau do luu ket qua vao memory voi key multiply_result",
     "eval_type": "functional",
-    "eval_script": ""eval_script": "test -f result.txt && grep -q 255 result.txt"",
+    "eval_script": "file_contains|result.txt|255",
     "max_steps": 15
   },
   {
@@ -76,7 +76,7 @@
     "description": "Task kho can tu quyet dinh thu tu tool",
     "instruction": "Kiem tra workspace co README.md khong, doc file neu co, dem so tu va ghi tom tat vao summary.txt",
     "eval_type": "functional",
-    "eval_script": "test -f summary.txt && test -s summary.txt",
+    "eval_script": "file_nonempty|summary.txt",
     "max_steps": 15
   }
 ]

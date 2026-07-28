@@ -35,6 +35,9 @@ add_library(oop_agent_tools
     src/tools/searxng_transport.cpp
     src/tools/memory_tool.cpp
     src/tools/sqlite_memory_store.cpp
+    src/tools/time_tool.cpp
+    src/tools/list_directory_tool.cpp
+    src/tools/text_stats_tool.cpp
 )
 
 target_include_directories(oop_agent_tools
@@ -65,6 +68,40 @@ target_link_libraries(oop_agent_core
         nlohmann_json::nlohmann_json
 )
 
+add_library(oop_agent_harness
+    src/harness/keyword_evaluator.cpp
+    src/harness/functional_evaluator.cpp
+    src/harness/trajectory.cpp
+    src/harness/trajectory_recorder.cpp
+    src/harness/harness_runner.cpp
+)
+
+target_include_directories(oop_agent_harness
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(oop_agent_harness
+    PUBLIC
+        oop_agent_core
+        nlohmann_json::nlohmann_json
+)
+
+add_executable(oop_agent_benchmark
+    benchmark/run_eval.cpp
+)
+
+target_compile_definitions(oop_agent_benchmark
+    PRIVATE
+        OOP_AGENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_link_libraries(oop_agent_benchmark
+    PRIVATE
+        oop_agent_client
+        oop_agent_harness
+)
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(oop_agent_client_tests
@@ -84,4 +121,10 @@ if(BUILD_TESTING)
     )
     target_link_libraries(oop_agent_core_tests PRIVATE oop_agent_core)
     add_test(NAME oop_agent_core_tests COMMAND oop_agent_core_tests)
+
+    add_executable(oop_agent_harness_tests
+        tests/harness_tests.cpp
+    )
+    target_link_libraries(oop_agent_harness_tests PRIVATE oop_agent_harness)
+    add_test(NAME oop_agent_harness_tests COMMAND oop_agent_harness_tests)
 endif()

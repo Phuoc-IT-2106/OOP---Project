@@ -1,4 +1,3 @@
-// Placeholder: KeywordEvaluator implementation.
 #include "keyword_evaluator.h"
 
 #include <algorithm>

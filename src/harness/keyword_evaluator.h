@@ -1,4 +1,3 @@
-// Placeholder: KeywordEvaluator declaration.
 #pragma once
 
 #include "evaluator.h"
