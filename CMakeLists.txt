@@ -11,6 +11,22 @@ find_package(nlohmann_json REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
 
+# =========================
+# Week 7 - GUI Agent
+# =========================
+
+find_path(
+    XDO_INCLUDE_DIR
+    NAMES xdo.h
+    REQUIRED
+)
+
+find_library(
+    XDO_LIBRARY
+    NAMES xdo
+    REQUIRED
+)
+
 add_library(oop_agent_client
     src/client/ollama_client.cpp
     src/client/ollama_embedding_client.cpp
@@ -27,6 +43,21 @@ target_link_libraries(oop_agent_client
         nlohmann_json::nlohmann_json
 )
 
+add_library(oop_agent_gui
+    src/gui/action_executor.cpp
+)
+
+target_include_directories(oop_agent_gui
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${XDO_INCLUDE_DIR}
+)
+
+target_link_libraries(oop_agent_gui
+    PUBLIC
+        ${XDO_LIBRARY}
+)
+
 add_library(oop_agent_tools
     src/tools/tool_registry.cpp
     src/tools/calculator_tool.cpp
@@ -39,6 +70,8 @@ add_library(oop_agent_tools
     src/tools/time_tool.cpp
     src/tools/list_directory_tool.cpp
     src/tools/text_stats_tool.cpp
+    src/tools/screenshot_tool.cpp
+    src/tools/gui_action_tool.cpp
 )
 
 target_include_directories(oop_agent_tools
@@ -51,6 +84,7 @@ target_link_libraries(oop_agent_tools
         CURL::libcurl
         nlohmann_json::nlohmann_json
         SQLite::SQLite3
+        oop_agent_gui
 )
 
 add_library(oop_agent_core
