@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <type_traits>
 
+extern "C" {
 #include <xdo.h>
 
 namespace oop_agent::gui {
