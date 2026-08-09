@@ -165,4 +165,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(oop_agent_harness_tests PRIVATE oop_agent_harness)
     add_test(NAME oop_agent_harness_tests COMMAND oop_agent_harness_tests)
+    add_executable(oop_agent_gui_tests
+    tests/gui_agent_tests.cpp
+)
+
+target_link_libraries(oop_agent_gui_tests
+    PRIVATE
+        oop_agent_tools
+        oop_agent_gui
+)
+
+add_test(
+    NAME oop_agent_gui_tests
+    COMMAND oop_agent_gui_tests
+)
 endif()
