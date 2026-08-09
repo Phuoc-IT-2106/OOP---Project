@@ -1,6 +1,7 @@
 #pragma once
 
 #include "client/llm_client.h"
+#include "loop_detector.h"
 #include "skills/skill_loader.h"
 #include "tools/tool_registry.h"
 
@@ -49,6 +50,7 @@ struct AgentRunResult {
 struct AgentLoopConfig {
     std::size_t max_steps{10};
     std::size_t max_skills{3};
+    LoopDetectorConfig loop_detection{};
     std::string base_instruction{
         "You are an AI agent that solves the user's task with the available tools."};
 };
@@ -96,6 +98,7 @@ class AgentLoop {
     tools::ToolRegistry &tool_registry_;
     skills::SkillLoader &skill_loader_;
     AgentLoopConfig config_;
+    LoopDetector loop_detector_;
     StepHook step_hook_;
 };
 

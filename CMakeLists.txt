@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(Threads REQUIRED)
 
 add_library(oop_agent_client
     src/client/ollama_client.cpp
@@ -54,6 +55,8 @@ target_link_libraries(oop_agent_tools
 
 add_library(oop_agent_core
     src/agent/agent_loop.cpp
+    src/agent/loop_detector.cpp
+    src/agent/multi_agent_coordinator.cpp
     src/skills/skill_loader.cpp
 )
 
@@ -66,6 +69,7 @@ target_link_libraries(oop_agent_core
     PUBLIC
         oop_agent_tools
         nlohmann_json::nlohmann_json
+        Threads::Threads
 )
 
 add_library(oop_agent_harness

@@ -1,4 +1,7 @@
 #include "agent/agent_loop.h"
+#include "agent/loop_detector.h"
+#include "agent/message_queue.h"
+#include "agent/multi_agent_coordinator.h"
 #include "skills/skill_loader.h"
 #include "tools/calculator_tool.h"
 #include "tools/tool_registry.h"
@@ -18,6 +21,13 @@ namespace {
 using oop_agent::agent::ActionType;
 using oop_agent::agent::AgentLoop;
 using oop_agent::agent::AgentLoopConfig;
+using oop_agent::agent::LoopDetector;
+using oop_agent::agent::LoopDetectorConfig;
+using oop_agent::agent::LoopKind;
+using oop_agent::agent::LoopSeverity;
+using oop_agent::agent::MessageQueue;
+using oop_agent::agent::MultiAgentCoordinator;
+using oop_agent::agent::ParallelAgentTask;
 using oop_agent::client::ChatRequest;
 using oop_agent::client::ChatResponse;
 using oop_agent::client::LLMClient;
@@ -185,6 +195,119 @@ void testMaximumStepLimitIsGraceful() {
     std::filesystem::remove_all(directory);
 }
 
+void testLoopDetectorRepeatAndPingPong() {
+    LoopDetectorConfig config;
+    config.repeat = {2, 3};
+    config.ping_pong = {2, 3};
+    config.max_history = 8;
+    LoopDetector detector(config);
+
+    expect(!detector.observe("A").detected(),
+           "first action should not be a repeat loop");
+    const auto repeat_warning = detector.observe("A");
+    expect(repeat_warning.kind == LoopKind::Repeat &&
+               repeat_warning.severity == LoopSeverity::Warning &&
+               !repeat_warning.shouldStop(),
+           "second identical action should reach repeat warning");
+    const auto repeat_critical = detector.observe("A");
+    expect(repeat_critical.kind == LoopKind::Repeat &&
+               repeat_critical.severity == LoopSeverity::Critical &&
+               repeat_critical.shouldStop(),
+           "third identical action should reach repeat critical");
+
+    detector.reset();
+    expect(detector.historySize() == 0, "reset should clear loop history");
+    detector.observe("A");
+    detector.observe("B");
+    detector.observe("A");
+    const auto ping_pong_warning = detector.observe("B");
+    expect(ping_pong_warning.kind == LoopKind::PingPong &&
+               ping_pong_warning.severity == LoopSeverity::Warning,
+           "A-B-A-B should reach ping-pong warning");
+    detector.observe("A");
+    const auto ping_pong_critical = detector.observe("B");
+    expect(ping_pong_critical.kind == LoopKind::PingPong &&
+               ping_pong_critical.shouldStop(),
+           "three A-B cycles should reach ping-pong critical");
+}
+
+void testAgentLoopStopsBeforeCriticalAction() {
+    const auto directory = createSkillDirectory("agent-loop-detector-workspace");
+    SkillLoader loader(directory);
+    ToolRegistry registry;
+    expect(registry.registerFactory(
+               "calculator", [] { return std::make_unique<CalculatorTool>(); }),
+           "calculator registration should succeed");
+
+    const std::string repeated_action =
+        R"({"thought":"Retry","action":{"type":"tool_call","tool":"calculator","args":{"expression":"1+1"}}})";
+    ScriptedClient client({successfulResponse(repeated_action),
+                           successfulResponse(repeated_action),
+                           successfulResponse(repeated_action)});
+
+    AgentLoopConfig config;
+    config.max_steps = 5;
+    config.loop_detection.repeat = {2, 3};
+    AgentLoop agent(client, registry, loader, config);
+    std::vector<oop_agent::agent::AgentStep> steps;
+    agent.setStepHook([&steps](const auto &step) { steps.push_back(step); });
+
+    const auto result = agent.run("Calculate repeatedly for loop detection");
+    expect(!result.success && result.steps_taken == 3 &&
+               result.error_message.find("repeat loop detected") !=
+                   std::string::npos,
+           "AgentLoop should stop when repeat severity becomes critical");
+    expect(steps.size() == 3 && steps[0].result.success &&
+               steps[1].result.success && !steps[2].result.success,
+           "critical repeated action should be recorded but not executed");
+
+    std::filesystem::remove_all(directory);
+}
+
+void testMessageQueueAndMultiAgentCommunication() {
+    MessageQueue<int> queue;
+    expect(queue.push(10) && queue.push(20),
+           "open message queue should accept messages");
+    expect(queue.waitPop() == 10 && queue.waitPop() == 20,
+           "message queue should preserve FIFO order");
+    queue.close();
+    expect(!queue.push(30) && !queue.waitPop().has_value(),
+           "closed empty queue should reject pushes and unblock receivers");
+
+    const auto first_directory =
+        createSkillDirectory("multi-agent-first-workspace");
+    const auto second_directory =
+        createSkillDirectory("multi-agent-second-workspace");
+    SkillLoader first_loader(first_directory);
+    SkillLoader second_loader(second_directory);
+    ToolRegistry first_registry;
+    ToolRegistry second_registry;
+    ScriptedClient first_client({successfulResponse(
+        R"({"thought":"First done","action":{"type":"final","answer":"result-one"}})")});
+    ScriptedClient second_client({successfulResponse(
+        R"({"thought":"Second done","action":{"type":"final","answer":"result-two"}})")});
+    AgentLoop first_agent(first_client, first_registry, first_loader);
+    AgentLoop second_agent(second_client, second_registry, second_loader);
+    MultiAgentCoordinator coordinator(first_agent, second_agent);
+
+    const auto result = coordinator.run(
+        ParallelAgentTask{"Solve first independent part",
+                          "Solve second independent part"});
+    expect(result.success(),
+           "two successful agents should exchange messages successfully");
+    expect(result.first.peer_message->sender_id == "agent_2" &&
+               result.first.peer_message->recipient_id == "agent_1" &&
+               result.first.peer_message->content == "result-two",
+           "first agent should receive the second agent result");
+    expect(result.second.peer_message->sender_id == "agent_1" &&
+               result.second.peer_message->recipient_id == "agent_2" &&
+               result.second.peer_message->content == "result-one",
+           "second agent should receive the first agent result");
+
+    std::filesystem::remove_all(first_directory);
+    std::filesystem::remove_all(second_directory);
+}
+
 } // namespace
 
 int main() {
@@ -193,6 +316,9 @@ int main() {
         testReActToolCallThenFinalAnswer();
         testMalformedActionCanSelfCorrect();
         testMaximumStepLimitIsGraceful();
+        testLoopDetectorRepeatAndPingPong();
+        testAgentLoopStopsBeforeCriticalAction();
+        testMessageQueueAndMultiAgentCommunication();
         std::cout << "All agent core tests passed\n";
         return 0;
     } catch (const std::exception &error) {

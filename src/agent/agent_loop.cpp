@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
+#include <iostream>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -33,6 +34,14 @@ std::int64_t saturatingAdd(std::int64_t left, std::int64_t right) {
 
 std::string jsonValueToArgument(const Json &value) {
     return value.is_string() ? value.get<std::string>() : value.dump();
+}
+
+std::string actionSignature(const AgentAction &action) {
+    Json arguments = Json::object();
+    for (const auto &[name, value] : action.arguments) {
+        arguments[name] = value;
+    }
+    return Json{{"tool", action.tool_name}, {"args", std::move(arguments)}}.dump();
 }
 
 bool tryParseObject(std::string_view text, Json &parsed) {
@@ -112,7 +121,8 @@ AgentLoop::AgentLoop(client::LLMClient &client,
     : client_(client),
       tool_registry_(tool_registry),
       skill_loader_(skill_loader),
-      config_(std::move(config)) {
+      config_(std::move(config)),
+      loop_detector_(config_.loop_detection) {
     if (config_.max_steps == 0) {
         throw std::invalid_argument("AgentLoop max_steps must be greater than zero");
     }
@@ -136,6 +146,8 @@ AgentRunResult AgentLoop::run(const std::string &task) {
     if (isBlank(task)) {
         return failureResult("task must not be empty", 0, 0, 0, {}, {});
     }
+
+    loop_detector_.reset();
 
     std::vector<skills::Skill> selected;
     try {
@@ -251,6 +263,27 @@ AgentRunResult AgentLoop::run(const std::string &task) {
             result.selected_skills = std::move(selected_names);
             result.conversation = std::move(conversation);
             return result;
+        }
+
+        const auto loop_detection =
+            loop_detector_.observe(actionSignature(parsed.action));
+        if (loop_detection.detected()) {
+            std::cerr << "[LoopDetector] " << loop_detection.message << '\n';
+        }
+        if (loop_detection.shouldStop()) {
+            step.result = tools::ToolResult::failed(loop_detection.message);
+            std::string hook_error;
+            if (!notifyStep(step, hook_error)) {
+                return failureResult(std::move(hook_error), step_id + 1,
+                                     total_tokens, total_latency,
+                                     std::move(selected_names),
+                                     std::move(conversation));
+            }
+            return failureResult("agent stopped by loop detector: " +
+                                     loop_detection.message,
+                                 step_id + 1, total_tokens, total_latency,
+                                 std::move(selected_names),
+                                 std::move(conversation));
         }
 
         try {

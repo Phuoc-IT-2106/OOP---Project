@@ -134,6 +134,8 @@ void testBatchEvaluationAndJsonOutput() {
                trajectory["steps"][0]["tool_result"]["success"] == true,
            "trajectory should record tool arguments and result");
 
+    summary_file.close();
+    trajectory_file.close();
     fs::remove_all(root);
 }
 

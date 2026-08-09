@@ -21,14 +21,14 @@ docs/                UML, sequence diagram, component diagram va bao cao
 
 ## Trang thai hien tai
 
-Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. `OllamaEmbeddingClient` goi `/api/embed` voi model mac dinh `nomic-embed-text` va tra ve `std::vector<double>`. Cac interface, tool, AgentLoop va benchmark Harness da san sang de chay tap 10 task tu dong.
+Repo dang o giai doan trien khai cac module cot loi. `OllamaClient` da co logic HTTP POST text-only den Ollama `/api/chat`. `OllamaEmbeddingClient` goi `/api/embed` voi model mac dinh `nomic-embed-text` va tra ve `std::vector<double>`. AgentLoop da tich hop LoopDetector cho repeat/ping-pong. `MultiAgentCoordinator` co the chay hai AgentLoop tren hai thread va trao doi ket qua qua message queue. Cac interface, tool va benchmark Harness da san sang de chay tap 10 task tu dong.
 
 ## Module chinh
 
 - `src/client`: `LLMClient`, `OllamaClient`, `EmbeddingClient`, `OllamaEmbeddingClient`.
 - `src/tools`: `Tool`, `ToolRegistry`, 5 tool bat buoc va 3 tool mo rong.
 - `src/skills`: `SkillLoader`.
-- `src/agent`: `AgentLoop`, `LoopDetector`.
+- `src/agent`: `AgentLoop`, `LoopDetector`, `MessageQueue`, `MultiAgentCoordinator`.
 - `src/harness`: `HarnessRunner`, `Trajectory`, `Evaluator`, `Environment`, hook va recorder.
 
 ## Dang ky tool dong
@@ -113,6 +113,37 @@ if (result.success) {
 ```
 
 Can tai model mot lan truoc khi chay that: `ollama pull nomic-embed-text`. Unit test cua client dung fake HTTP transport, nen khong can Ollama hay model that.
+
+## Loop detection
+
+`LoopDetector` luu chu ky action da chuan hoa (ten tool va arguments). Repeat la cung mot action lien tiep; ping-pong la hai action khac nhau xen ke theo mau `A-B-A-B`. Moi loai co nguong warning va critical rieng. Agent tiep tuc sau warning, nhung log va dung truoc khi thuc thi action dat critical.
+
+```cpp
+oop_agent::agent::AgentLoopConfig config;
+config.loop_detection.repeat = {3, 4};
+config.loop_detection.ping_pong = {2, 3}; // So chu ky A-B.
+config.loop_detection.max_history = 64;
+```
+
+Detector duoc reset o dau moi `AgentLoop::run()`, nen history cua task truoc khong anh huong task sau.
+
+## Multi-agent coordination
+
+`MultiAgentCoordinator` nhan hai `AgentLoop` doc lap va hai subtask. Moi agent chay tren mot `std::thread`, gui `AgentMessage` sang mailbox cua agent con lai, nhan ket qua peer, sau do coordinator `join` ca hai thread truoc khi tra ve.
+
+```cpp
+oop_agent::agent::MultiAgentCoordinator coordinator(agent_one, agent_two);
+const auto result = coordinator.run({
+    "Phan tich phan du lieu thu nhat",
+    "Phan tich phan du lieu thu hai",
+});
+
+if (result.success()) {
+    const auto &answer_from_agent_two = result.first.peer_message->content;
+}
+```
+
+Hai tham so phai la hai `AgentLoop` khac nhau. Khi chay that, moi agent nen co LLM client va cac dependency rieng de tranh data race. `MessageQueue<T>` dung FIFO `std::queue`, bao ve bang `std::mutex`, va dung `std::condition_variable` de worker cho message ma khong busy-wait.
 
 ## Dependencies
 
