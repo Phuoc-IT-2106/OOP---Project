@@ -156,15 +156,33 @@ std::string OllamaClient::buildUrl() const {
 
 std::string OllamaClient::buildPayload(const ChatRequest &request) const {
     Json messages = Json::array();
+
     for (const auto &message : request.messages) {
-        messages.push_back({{"role", message.role}, {"content", message.content}});
+        Json json_message{
+            {"role", message.role},
+            {"content", message.content}
+        };
+
+        // Week 8 - Multimodal support
+        // Ollama /api/chat nhận ảnh Base64 qua trường "images".
+        if (!message.images.empty()) {
+            json_message["images"] = message.images;
+        }
+
+        messages.push_back(std::move(json_message));
     }
 
-    Json payload{{"model", config_.model_name},
-                 {"messages", messages},
-                 {"stream", false},
-                 {"options",
-                  {{"temperature", config_.temperature}, {"num_predict", config_.max_tokens}}}};
+    Json payload{
+        {"model", config_.model_name},
+        {"messages", messages},
+        {"stream", false},
+        {"options",
+            {
+                {"temperature", config_.temperature},
+                {"num_predict", config_.max_tokens}
+            }
+        }
+    };
 
     return payload.dump();
 }
