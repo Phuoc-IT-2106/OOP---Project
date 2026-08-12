@@ -11,6 +11,7 @@ struct OllamaConfig {
     std::string base_url{"http://localhost:11434"};
     std::string endpoint{"/api/chat"};
     std::string model_name{"qwen2.5:7b"};
+
     double temperature{0.2};
     int max_tokens{1024};
     long timeout_seconds{60};
@@ -18,13 +19,22 @@ struct OllamaConfig {
 
 class OllamaClient final : public LLMClient {
   public:
-    // Retain this public alias for existing call sites that inject transports.
+    // Giữ alias này để các test/code cũ vẫn inject transport được.
     using HttpTransport = OllamaHttpTransport;
 
-    explicit OllamaClient(OllamaConfig config);
-    OllamaClient(OllamaConfig config, HttpTransport transport);
+    explicit OllamaClient(
+        OllamaConfig config
+    );
 
-    ChatResponse chat(const ChatRequest &request) override;
+    OllamaClient(
+        OllamaConfig config,
+        HttpTransport transport
+    );
+
+    // Hỗ trợ cả text-only và multimodal.
+    ChatResponse chat(
+        const ChatRequest &request
+    ) override;
 
     const OllamaConfig &config() const;
 
@@ -33,8 +43,18 @@ class OllamaClient final : public LLMClient {
     HttpTransport transport_;
 
     std::string buildUrl() const;
-    std::string buildPayload(const ChatRequest &request) const;
-    ChatResponse parseResponse(const HttpResponse &http_response, long latency_ms) const;
+
+    // Week 8:
+    // Nếu ChatMessage.images không rỗng,
+    // payload sẽ thêm trường "images".
+    std::string buildPayload(
+        const ChatRequest &request
+    ) const;
+
+    ChatResponse parseResponse(
+        const HttpResponse &http_response,
+        long latency_ms
+    ) const;
 };
 
 } // namespace oop_agent::client
