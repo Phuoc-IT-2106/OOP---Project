@@ -1,7 +1,11 @@
+#include "client/base64.h"
+#include "client/ollama_client.h"
 #include "client/embedding_client.h"
 #include "client/ollama_embedding_client.h"
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -125,6 +129,100 @@ void testOllamaEmbeddingClientValidatesInputAndConfig() {
 }
 
 } // namespace
+void testBase64FileEncoding() {
+    const std::filesystem::path test_file =
+        "test_base64.bin";
+
+    {
+        std::ofstream output(
+            test_file,
+            std::ios::binary
+        );
+
+        output << "Man";
+    }
+
+    const std::string encoded =
+        oop_agent::client::Base64::encodeFile(
+            test_file
+        );
+
+    expect(
+        encoded == "TWFu",
+        "Base64 encoder should encode 'Man' as TWFu"
+    );
+
+    std::filesystem::remove(test_file);
+}
+
+void testOllamaClientBuildsMultimodalPayload() {
+    using oop_agent::client::ChatMessage;
+    using oop_agent::client::ChatRequest;
+    using oop_agent::client::OllamaClient;
+    using oop_agent::client::OllamaConfig;
+
+    OllamaConfig config;
+    config.base_url = "http://ollama.test:11434";
+    config.endpoint = "/api/chat";
+    config.model_name = "test-vlm";
+
+    std::string captured_payload;
+
+    const OllamaClient::HttpTransport fake_transport =
+        [&](const std::string &,
+            const std::string &payload,
+            long) {
+            captured_payload = payload;
+
+            return HttpResponse{
+                200,
+                R"({
+                    "message": {
+                        "role": "assistant",
+                        "content": "{\"action\":\"click\",\"x\":\"100\",\"y\":\"200\"}"
+                    },
+                    "prompt_eval_count": 10,
+                    "eval_count": 5
+                })",
+                {}
+            };
+        };
+
+    OllamaClient client(
+        config,
+        fake_transport
+    );
+
+    ChatMessage message;
+    message.role = "user";
+    message.content =
+        "Analyze this screenshot.";
+    message.images.push_back("TWFu");
+
+    ChatRequest request;
+    request.messages.push_back(message);
+
+    const auto response =
+        client.chat(request);
+
+    expect(
+        response.success,
+        "multimodal Ollama request should succeed"
+    );
+
+    const Json payload =
+        Json::parse(captured_payload);
+
+    expect(
+        payload["messages"][0].contains("images"),
+        "multimodal payload should contain images"
+    );
+
+    expect(
+        payload["messages"][0]["images"][0] == "TWFu",
+        "multimodal payload should include Base64 image"
+    );
+}
 
 int main() {
     try {
@@ -132,6 +230,8 @@ int main() {
         testOllamaEmbeddingClientWithFakeTransport();
         testOllamaEmbeddingClientRejectsInvalidResponses();
         testOllamaEmbeddingClientValidatesInputAndConfig();
+        testBase64FileEncoding();
+        testOllamaClientBuildsMultimodalPayload();
         std::cout << "All client tests passed\n";
         return 0;
     } catch (const std::exception &error) {
