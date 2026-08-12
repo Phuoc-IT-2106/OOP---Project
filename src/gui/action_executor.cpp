@@ -5,7 +5,7 @@
 
 extern "C" {
 #include <xdo.h>
-
+}
 namespace oop_agent::gui {
 
 ActionExecutor::ActionExecutor() {
