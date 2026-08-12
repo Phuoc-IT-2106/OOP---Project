@@ -30,6 +30,7 @@ find_library(
 add_library(oop_agent_client
     src/client/ollama_client.cpp
     src/client/ollama_embedding_client.cpp
+    src/client/base64.cpp
 )
 
 target_include_directories(oop_agent_client
