@@ -223,7 +223,93 @@ void testOllamaClientBuildsMultimodalPayload() {
         "multimodal payload should include Base64 image"
     );
 }
+void testOllamaMultimodalActionResponse() {
+    using oop_agent::client::ChatMessage;
+    using oop_agent::client::ChatRequest;
+    using oop_agent::client::OllamaClient;
+    using oop_agent::client::OllamaConfig;
 
+    OllamaConfig config;
+    config.base_url = "http://ollama.test:11434";
+    config.endpoint = "/api/chat";
+    config.model_name = "test-vlm";
+
+    std::string captured_payload;
+
+    const OllamaClient::HttpTransport fake_transport =
+        [&](const std::string &,
+            const std::string &payload,
+            long) {
+            captured_payload = payload;
+
+            return HttpResponse{
+                200,
+                R"({
+                    "message": {
+                        "role": "assistant",
+                        "content": "{\"action\":\"click\",\"x\":500,\"y\":300,\"button\":1}"
+                    },
+                    "prompt_eval_count": 25,
+                    "eval_count": 8
+                })",
+                {}
+            };
+        };
+
+    OllamaClient client(
+        config,
+        fake_transport
+    );
+
+    ChatMessage message;
+    message.role = "user";
+    message.content =
+        "Analyze the screenshot and return exactly one GUI action.";
+
+    message.images.push_back(
+        "iVBORw0KGgoAAAATESTBASE64"
+    );
+
+    ChatRequest request;
+    request.messages.push_back(message);
+
+    const auto response =
+        client.chat(request);
+
+    expect(
+        response.success,
+        "multimodal VLM request should succeed"
+    );
+
+    const Json payload =
+        Json::parse(captured_payload);
+
+    expect(
+        payload["messages"][0].contains("images"),
+        "multimodal request should contain images field"
+    );
+
+    expect(
+        payload["messages"][0]["images"][0]
+            == "iVBORw0KGgoAAAATESTBASE64",
+        "multimodal request should preserve Base64 image"
+    );
+
+    const Json action =
+        Json::parse(response.content);
+
+    expect(
+        action["action"] == "click",
+        "VLM should return a GUI action"
+    );
+
+    expect(
+        action["x"] == 500 &&
+        action["y"] == 300 &&
+        action["button"] == 1,
+        "VLM click action should contain coordinates and button"
+    );
+}
 int main() {
     try {
         testEmbeddingInterfaceIsAbstract();
@@ -232,6 +318,7 @@ int main() {
         testOllamaEmbeddingClientValidatesInputAndConfig();
         testBase64FileEncoding();
         testOllamaClientBuildsMultimodalPayload();
+        testOllamaMultimodalActionResponse();
         std::cout << "All client tests passed\n";
         return 0;
     } catch (const std::exception &error) {
