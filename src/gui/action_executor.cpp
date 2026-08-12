@@ -87,7 +87,7 @@ ActionExecutionResult ActionExecutor::click(
     const int status =
         xdo_click_window(
             xdo_context_,
-            activeWindow,
+            CURRENTWINDOW,
             button
         );
 
@@ -131,7 +131,7 @@ ActionExecutionResult ActionExecutor::typeText(
     const int status =
         xdo_enter_text_window(
             xdo_context_,
-            activeWindow,
+            CURRENTWINDOW,
             text.c_str(),
             12000
         );
@@ -176,7 +176,7 @@ ActionExecutionResult ActionExecutor::keyPress(
     const int status =
         xdo_send_keysequence_window(
             xdo_context_,
-            activeWindow,
+            CURRENTWINDOW,
             key.c_str(),
             12000
         );
