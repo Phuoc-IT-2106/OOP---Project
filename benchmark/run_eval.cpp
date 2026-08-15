@@ -5,6 +5,7 @@
 #include "harness/functional_evaluator.h"
 #include "harness/harness_runner.h"
 #include "harness/keyword_evaluator.h"
+#include "harness/vlm_evaluator.h"
 #include "skills/skill_loader.h"
 #include "tools/calculator_tool.h"
 #include "tools/exec_tool.h"
@@ -24,6 +25,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -60,30 +62,71 @@ void printUsage(const char *program) {
         << "  --help                    Show this message\n";
 }
 
-std::string requireValue(int argc,
-                         char **argv,
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+
+std::vector<std::string> getUtf8Args(int argc, char **argv) {
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    int wide_argc = 0;
+    LPWSTR *wide_argv = CommandLineToArgvW(GetCommandLineW(), &wide_argc);
+    if (wide_argv == nullptr) {
+        std::vector<std::string> fallback;
+        for (int i = 0; i < argc; ++i) {
+            fallback.push_back(argv[i]);
+        }
+        return fallback;
+    }
+    std::vector<std::string> utf8_args;
+    utf8_args.reserve(wide_argc);
+    for (int i = 0; i < wide_argc; ++i) {
+        int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, nullptr, 0, nullptr, nullptr);
+        if (size_needed > 1) {
+            std::string str(size_needed - 1, '\0');
+            WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, &str[0], size_needed, nullptr, nullptr);
+            utf8_args.push_back(std::move(str));
+        } else {
+            utf8_args.push_back({});
+        }
+    }
+    LocalFree(wide_argv);
+    return utf8_args;
+}
+#else
+std::vector<std::string> getUtf8Args(int argc, char **argv) {
+    std::vector<std::string> args;
+    args.reserve(argc);
+    for (int i = 0; i < argc; ++i) {
+        args.push_back(argv[i]);
+    }
+    return args;
+}
+#endif
+
+std::string requireValue(const std::vector<std::string> &args,
                          int &index,
                          const std::string &option) {
-    if (index + 1 >= argc) {
+    if (index + 1 >= static_cast<int>(args.size())) {
         throw std::invalid_argument(option + " requires a value");
     }
-    return argv[++index];
+    return args[++index];
 }
 
-RunnerOptions parseOptions(int argc, char **argv) {
+RunnerOptions parseOptions(const std::vector<std::string> &args) {
     RunnerOptions options;
     options.project_root = fs::absolute(options.project_root);
     options.tasks_file = options.project_root / "benchmark" / "tasks.json";
     options.workspace = options.project_root / "benchmark" / "runtime_workspace";
     options.results_directory = options.project_root / "benchmark" / "results";
 
-    for (int index = 1; index < argc; ++index) {
-        const std::string option = argv[index];
+    for (int index = 1; index < static_cast<int>(args.size()); ++index) {
+        const std::string option = args[index];
         if (option == "--help") {
-            printUsage(argv[0]);
+            printUsage(args[0].c_str());
             std::exit(0);
         }
-        const auto value = requireValue(argc, argv, index, option);
+        const auto value = requireValue(args, index, option);
         if (option == "--tasks") {
             options.tasks_file = value;
         } else if (option == "--workspace") {
@@ -184,13 +227,20 @@ void validateTasks(const std::vector<oop_agent::harness::BenchmarkTask> &tasks) 
                                  std::to_string(tasks.size()));
     }
     std::unordered_set<std::string> task_ids;
+    std::unordered_map<std::string, std::size_t> difficulty_counts;
     for (const auto &task : tasks) {
-        if (task.id.empty() || task.description.empty() ||
+        if (task.id.empty() || task.difficulty.empty() || task.description.empty() ||
             task.instruction.empty() || task.eval_type.empty() ||
             task.max_steps == 0) {
             throw std::runtime_error(
                 "benchmark task has invalid required fields: " + task.id);
         }
+        if (task.difficulty != "simple" && task.difficulty != "medium" &&
+            task.difficulty != "hard") {
+            throw std::runtime_error(
+                "unsupported benchmark difficulty in task: " + task.id);
+        }
+        ++difficulty_counts[task.difficulty];
         if (task.eval_type == "functional" && task.eval_script.empty()) {
             throw std::runtime_error(
                 "functional task is missing eval_script: " + task.id);
@@ -200,8 +250,16 @@ void validateTasks(const std::vector<oop_agent::harness::BenchmarkTask> &tasks) 
             throw std::runtime_error(
                 "keyword task is missing expected_keywords: " + task.id);
         }
+        if (task.eval_type == "vlm" &&
+            task.expected_action.empty() &&
+            task.expected_keywords.empty()) {
+            throw std::runtime_error(
+                "vlm task needs expected_action or expected_keywords: " +
+                task.id);
+        }
         if (task.eval_type != "functional" &&
-            task.eval_type != "keyword") {
+            task.eval_type != "keyword" &&
+            task.eval_type != "vlm") {
             throw std::runtime_error(
                 "unsupported eval_type in task: " + task.id);
         }
@@ -209,6 +267,12 @@ void validateTasks(const std::vector<oop_agent::harness::BenchmarkTask> &tasks) 
             throw std::runtime_error(
                 "duplicate benchmark task id: " + task.id);
         }
+    }
+    if (difficulty_counts["simple"] != 4 ||
+        difficulty_counts["medium"] != 4 ||
+        difficulty_counts["hard"] != 2) {
+        throw std::runtime_error(
+            "benchmark difficulty distribution must be 4 simple, 4 medium, 2 hard");
     }
 }
 
@@ -270,7 +334,8 @@ void registerTools(
 
 int main(int argc, char **argv) {
     try {
-        const RunnerOptions options = parseOptions(argc, argv);
+        const auto args = getUtf8Args(argc, argv);
+        const RunnerOptions options = parseOptions(args);
         const auto tasks =
             oop_agent::harness::loadBenchmarkTasks(options.tasks_file);
         validateTasks(tasks);
@@ -317,6 +382,8 @@ int main(int argc, char **argv) {
             std::make_unique<oop_agent::harness::KeywordEvaluator>());
         harness.registerEvaluator(
             std::make_unique<oop_agent::harness::FunctionalEvaluator>());
+        harness.registerEvaluator(
+            std::make_unique<oop_agent::harness::VLMEvaluator>());
 
         // Shell-based exec/evaluation must resolve relative paths inside the
         // same isolated workspace used by the file tools.

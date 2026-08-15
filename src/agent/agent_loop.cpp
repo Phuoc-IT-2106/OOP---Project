@@ -58,6 +58,9 @@ bool findJsonObject(std::string_view text, Json &parsed) {
         return true;
     }
 
+    parsed = Json::object();
+    bool found_any = false;
+
     for (std::size_t start = text.find('{'); start != std::string_view::npos;
          start = text.find('{', start + 1)) {
         std::size_t depth = 0;
@@ -86,14 +89,21 @@ bool findJsonObject(std::string_view text, Json &parsed) {
                     break;
                 }
                 --depth;
-                if (depth == 0 &&
-                    tryParseObject(text.substr(start, index - start + 1), parsed)) {
-                    return true;
+                if (depth == 0) {
+                    Json temp;
+                    if (tryParseObject(text.substr(start, index - start + 1), temp)) {
+                        for (auto it = temp.begin(); it != temp.end(); ++it) {
+                            parsed[it.key()] = it.value();
+                        }
+                        found_any = true;
+                    }
+                    start = index; // Move start forward to avoid reparsing the same object
+                    break;
                 }
             }
         }
     }
-    return false;
+    return found_any;
 }
 
 AgentRunResult failureResult(std::string message,
@@ -420,7 +430,9 @@ std::string AgentLoop::buildSystemPrompt(
     std::ostringstream prompt;
     prompt << config_.base_instruction << "\n\n"
            << "Use this ReAct cycle: Observe -> Think -> Act -> Observe.\n"
-           << "At each step return exactly one JSON object, without markdown fences.\n"
+           << "CRITICAL: At each step return EXACTLY ONE valid JSON object, without markdown fences.\n"
+           << "Your response MUST contain BOTH 'thought' and 'action' fields in the SAME JSON object.\n"
+           << "DO NOT output multiple JSON objects. DO NOT output plain text outside the JSON object.\n"
            << "To call a tool:\n"
            << R"({"thought":"brief reasoning","action":{"type":"tool_call","tool":"tool_name","args":{"argument":"value"}}})"
            << "\nTo finish:\n"

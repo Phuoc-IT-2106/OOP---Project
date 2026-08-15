@@ -7,36 +7,71 @@ sequenceDiagram
     participant AgentLoop
     participant LLMClient
     participant ToolRegistry
+    participant Tool
+    participant LoopDetector
     participant Evaluator
     participant TrajectoryRecorder
 
-    User->>HarnessRunner: runTask(task)
+    User->>HarnessRunner: runBatch(tasks)
 
-    HarnessRunner->>Environment: setup()
+    loop For each BenchmarkTask in Batch
+        Note over HarnessRunner: runTask(task)
 
-    HarnessRunner->>AgentLoop: setStepHook(recordStep)
+        HarnessRunner->>Environment: setup()
+        Environment-->>HarnessRunner: workspace ready
 
-    HarnessRunner->>AgentLoop: run(task)
+        HarnessRunner->>AgentLoop: setStepHook(recordStep)
 
-    loop Agent Loop
-        AgentLoop->>LLMClient: sendPrompt(history)
-        LLMClient-->>AgentLoop: response
+        rect rgb(240, 248, 255)
+            Note over HarnessRunner,TrajectoryRecorder: Agent Execution Phase
 
-        alt Tool call required
-            AgentLoop->>ToolRegistry: executeTool(name,args)
-            ToolRegistry-->>AgentLoop: ToolResult
-            AgentLoop-->>HarnessRunner: Step
-            HarnessRunner->>TrajectoryRecorder: recordStep(step)
-        else Final answer
-            AgentLoop-->>HarnessRunner: AgentResult
+            HarnessRunner->>AgentLoop: run(task.instruction)
+
+            loop ReAct Loop (until FinalAnswer or MaxSteps)
+                AgentLoop->>LLMClient: chat(history)
+                LLMClient-->>AgentLoop: ChatResponse
+
+                AgentLoop->>LoopDetector: observe(actionSignature)
+                LoopDetector-->>AgentLoop: LoopDetection
+
+                alt Loop detected (critical)
+                    AgentLoop-->>HarnessRunner: AgentRunResult (stopped)
+                else Tool call required
+                    AgentLoop->>ToolRegistry: execute(toolName, args)
+                    ToolRegistry->>Tool: execute(args)
+                    Tool-->>ToolRegistry: ToolResult
+                    ToolRegistry-->>AgentLoop: ToolResult
+
+                    Note over AgentLoop: notifyStep via StepHook
+                    AgentLoop-->>HarnessRunner: AgentStep (via hook)
+                    HarnessRunner->>TrajectoryRecorder: recordStep(step)
+                else Final answer
+                    Note over AgentLoop: notifyStep via StepHook
+                    AgentLoop-->>HarnessRunner: AgentStep (via hook)
+                    HarnessRunner->>TrajectoryRecorder: recordStep(step)
+                    AgentLoop-->>HarnessRunner: AgentRunResult
+                end
+            end
         end
+
+        HarnessRunner->>AgentLoop: setStepHook({})
+        Note over HarnessRunner: Clear hook after run
+
+        rect rgb(255, 248, 240)
+            Note over HarnessRunner,Evaluator: Evaluation Phase
+
+            HarnessRunner->>Evaluator: evaluate(EvaluationInput)
+            Evaluator-->>HarnessRunner: EvaluationResult
+        end
+
+        HarnessRunner->>TrajectoryRecorder: save(trajectory)
+        Note over TrajectoryRecorder: Write trajectory_{task_id}.json
+
+        HarnessRunner->>Environment: cleanup()
     end
 
-    HarnessRunner->>Evaluator: evaluate(task,result)
-    Evaluator-->>HarnessRunner: EvaluationResult
+    Note over HarnessRunner: Aggregate BatchResult
+    HarnessRunner->>HarnessRunner: saveBatchResult()
+    Note over HarnessRunner: Write benchmark_summary.json
 
-    HarnessRunner->>TrajectoryRecorder: saveJSONTrajectory()
-
-    HarnessRunner->>Environment: cleanup()
-
-    HarnessRunner-->>User: EvaluationResult
+    HarnessRunner-->>User: BatchResult (success rate, per-task results)

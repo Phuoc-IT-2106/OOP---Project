@@ -62,7 +62,7 @@ Database openDatabase(const MemoryToolConfig &config) {
     }
 
     sqlite3 *raw_database = nullptr;
-    const std::string path = config.database_path.u8string();
+    const std::string path = config.database_path.string();
     const int status = sqlite3_open_v2(path.c_str(),
                                        &raw_database,
                                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |

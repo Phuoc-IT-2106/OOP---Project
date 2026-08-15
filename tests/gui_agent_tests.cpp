@@ -87,24 +87,18 @@ int main() {
                 100,
                 1
             );
-auto clickResult = executor.click(100, 100, 1);
 
-if (!clickResult.success) {
-    std::cout
-        << "[SKIP] Click test: "
-        << clickResult.message
-        << '\n';
-} else {
-    std::cout
-        << "[PASS] "
-        << clickResult.message
-        << '\n';
-}
-
-        std::cout
-            << "[PASS] "
-            << clickResult.message
-            << '\n';
+        if (!clickResult.success) {
+            std::cout
+                << "[SKIP] Click test: "
+                << clickResult.message
+                << '\n';
+        } else {
+            std::cout
+                << "[PASS] "
+                << clickResult.message
+                << '\n';
+        }
 
         std::cout
             << "\nAll GUI Agent Week 7 tests passed.\n";

@@ -1,105 +1,274 @@
 classDiagram
+    %% =============================
+    %% Client Layer
+    %% =============================
     class LLMClient {
         <<abstract>>
-        # string baseUrl
-        # string modelName
-        # float temperature
-        + getCompletion(string prompt) string*
+        + chat(ChatRequest request) ChatResponse*
     }
     class OllamaClient {
-        + getCompletion(string prompt) string
-        - sendHttpPost(string endpoint, string jsonPayload) string
+        - OllamaConfig config_
+        - OllamaHttpTransport transport_
+        + chat(ChatRequest request) ChatResponse
     }
     LLMClient <|-- OllamaClient : Inheritance
 
+    class EmbeddingClient {
+        <<abstract>>
+        + embed(string text) EmbeddingResponse*
+    }
+    class OllamaEmbeddingClient {
+        - OllamaEmbeddingConfig config_
+        - OllamaHttpTransport transport_
+        + embed(string text) EmbeddingResponse
+    }
+    EmbeddingClient <|-- OllamaEmbeddingClient : Inheritance
+
+    %% =============================
+    %% Tool Layer
+    %% =============================
     class Tool {
         <<abstract>>
-        + string name
-        + string description
-        + execute(string args)* string
+        + name() string_view*
+        + description() string_view*
+        + execute(ToolArguments args) ToolResult*
     }
-    class ExecTool { 
-+ execute(string args) string }
-    class FileTool { 
-+ execute(string args) string }
-    class WebSearchTool { 
-+ execute(string args) string }
-    class MemoryTool { 
-+ execute(string args) string }
-    class CalculatorTool { 
-+ execute(string args) string }
-    
+    class ExecTool {
+        + execute(ToolArguments args) ToolResult
+    }
+    class ReadFileTool {
+        - FileToolConfig config_
+        + execute(ToolArguments args) ToolResult
+    }
+    class WriteFileTool {
+        - FileToolConfig config_
+        + execute(ToolArguments args) ToolResult
+    }
+    class WebSearchTool {
+        - WebSearchConfig config_
+        - SearchTransport transport_
+        + execute(ToolArguments args) ToolResult
+    }
+    class MemorySaveTool {
+        - shared_ptr~MemoryStore~ store_
+        - shared_ptr~EmbeddingClient~ embedder_
+        + execute(ToolArguments args) ToolResult
+    }
+    class MemorySearchTool {
+        - shared_ptr~MemoryStore~ store_
+        - shared_ptr~EmbeddingClient~ embedder_
+        + execute(ToolArguments args) ToolResult
+    }
+    class CalculatorTool {
+        + execute(ToolArguments args) ToolResult
+    }
+    class TimeTool {
+        + execute(ToolArguments args) ToolResult
+    }
+    class ListDirectoryTool {
+        - ListDirectoryConfig config_
+        + execute(ToolArguments args) ToolResult
+    }
+    class TextStatsTool {
+        + execute(ToolArguments args) ToolResult
+    }
+    class ScreenshotTool {
+        - string output_directory_
+        + execute(ToolArguments args) ToolResult
+    }
+    class GuiActionTool {
+        - ActionExecutor executor_
+        + execute(ToolArguments args) ToolResult
+    }
+
     Tool <|-- ExecTool
-    Tool <|-- FileTool
+    Tool <|-- ReadFileTool
+    Tool <|-- WriteFileTool
     Tool <|-- WebSearchTool
-    Tool <|-- MemoryTool
+    Tool <|-- MemorySaveTool
+    Tool <|-- MemorySearchTool
     Tool <|-- CalculatorTool
+    Tool <|-- TimeTool
+    Tool <|-- ListDirectoryTool
+    Tool <|-- TextStatsTool
+    Tool <|-- ScreenshotTool
+    Tool <|-- GuiActionTool
+
+    class MemoryStore {
+        <<abstract>>
+        + save(string content, vector~string~ tags)*
+        + saveWithEmbedding(string content, vector~string~ tags, vector~double~ embedding)*
+        + search(string query, size_t limit) vector~MemoryEntry~*
+        + searchSimilar(vector~double~ query, size_t limit) vector~MemoryEntry~*
+    }
+    class SqliteMemoryStore {
+        - unique_ptr~sqlite3~ db_
+        + save(string content, vector~string~ tags)
+        + searchSimilar(vector~double~ query, size_t limit) vector~MemoryEntry~
+    }
+    MemoryStore <|-- SqliteMemoryStore
+    MemorySaveTool o-- MemoryStore
+    MemorySearchTool o-- MemoryStore
 
     class ToolRegistry {
-        - map<string, unique_ptr~Tool~> tools
-        + registerTool(unique_ptr~Tool~ tool)
-        + getTool(string name) Tool*
-        + executeTool(string name, string args) string
+        - map~string, Entry~ entries_
+        - unordered_set~string~ allow_list_
+        - unordered_set~string~ deny_list_
+        + registerFactory(string name, ToolFactory factory)
+        + create(string name) unique_ptr~Tool~
+        + execute(string name, ToolArguments args) ToolResult
+        + allowOnly(vector~string~ names)
+        + deny(vector~string~ names)
+        + listDescriptors() vector~ToolDescriptor~
     }
-    ToolRegistry "1" *-- "many" Tool : Composition (Registry Pattern)
+    ToolRegistry "1" *-- "many" Tool : Registry / Factory Pattern
 
+    %% =============================
+    %% Skill Layer
+    %% =============================
     class SkillLoader {
-        - string skillsDir
-        + loadSkills() vector~string~
-        + selectSkill(string taskDescription) string
+        - path skills_directory_
+        - vector~Skill~ skills_
+        + loadSkills()
+        + selectSkills(string task, size_t max) vector~Skill~
     }
 
+    %% =============================
+    %% Agent Layer
+    %% =============================
     class LoopDetector {
-        - vector~string~ history
-        + detectLoop(string currentAction) bool
+        - LoopDetectorConfig config_
+        - vector~string~ history_
+        + observe(string action_signature)
+        + detected() LoopDetection
+        + shouldStop() bool
+        + reset()
     }
 
     class AgentLoop {
-        - LLMClient* client
-        - ToolRegistry* registry
-        - SkillLoader* skillLoader
-        - LoopDetector* detector
-        - function~void(Step)~ stepHook
-        + setStepHook(function~void(Step)~ hook)
-        + run(string task) Trajectory
-        # observe() Step
-        # think(Step step) string
-        # act(string action) string
+        - LLMClient client_
+        - ToolRegistry tool_registry_
+        - SkillLoader skill_loader_
+        - AgentLoopConfig config_
+        - LoopDetector loop_detector_
+        - StepHook step_hook_
+        + setStepHook(StepHook hook)
+        + setMaxSteps(size_t max_steps)
+        + run(string task) AgentRunResult
+        # think(ChatRequest request) ChatResponse
+        # act(AgentAction action) ToolResult
+        # observe(ToolResult result) string
     }
     AgentLoop "1" o-- "1" LLMClient : Aggregation
     AgentLoop "1" o-- "1" ToolRegistry : Aggregation
     AgentLoop "1" o-- "1" SkillLoader : Aggregation
-    AgentLoop "1" o-- "1" LoopDetector : Aggregation
+    AgentLoop "1" *-- "1" LoopDetector : Composition
+
+    class MessageQueue~T~ {
+        - queue~T~ messages_
+        - mutex mutex_
+        - condition_variable available_
+        - bool closed_
+        + push(T message)
+        + waitPop() optional~T~
+        + close()
+    }
+
+    class MultiAgentCoordinator {
+        - AgentLoop first_agent_
+        - AgentLoop second_agent_
+        - MultiAgentConfig config_
+        + run(ParallelAgentTask task) MultiAgentResult
+    }
+    MultiAgentCoordinator "1" o-- "2" AgentLoop : Coordinates
+    MultiAgentCoordinator ..> MessageQueue~AgentMessage~ : Uses
+
+    %% =============================
+    %% Harness Layer
+    %% =============================
+    class Environment {
+        <<abstract>>
+        + setup()*
+        + cleanup()*
+        + workingDirectory() path*
+    }
+    class NativeEnvironment {
+        - path working_directory_
+        - vector~path~ reset_paths_
+        + setup()
+        + cleanup()
+        + workingDirectory() path
+    }
+    class SandboxEnvironment {
+        - path sandbox_root_
+        - bool remove_on_cleanup_
+        + setup()
+        + cleanup()
+        + workingDirectory() path
+    }
+    Environment <|-- NativeEnvironment : Strategy Pattern
+    Environment <|-- SandboxEnvironment : Strategy Pattern
 
     class Evaluator {
         <<abstract>>
-        + evaluate(Trajectory t)* double
+        + name() string_view*
+        + evaluate(EvaluationInput input) EvaluationResult*
     }
-    class KeywordEvaluator { + evaluate(Trajectory t) double }
-    class FunctionalEvaluator { + evaluate(Trajectory t) double }
-    
+    class KeywordEvaluator {
+        + name() string_view
+        + evaluate(EvaluationInput input) EvaluationResult
+    }
+    class FunctionalEvaluator {
+        + name() string_view
+        + evaluate(EvaluationInput input) EvaluationResult
+    }
+    class VLMEvaluator {
+        + name() string_view
+        + evaluate(EvaluationInput input) EvaluationResult
+    }
     Evaluator <|-- KeywordEvaluator : Strategy Pattern
     Evaluator <|-- FunctionalEvaluator : Strategy Pattern
+    Evaluator <|-- VLMEvaluator : Strategy Pattern
 
-    class Trajectory {
-        + string taskId
-        + bool success
-        + vector~Step~ steps
-    }
-    class Step {
-        + int stepId
+    class TrajectoryStep {
+        + size_t step_id
         + string thought
-        + string action
-        + string result
+        + string action_type
+        + string tool_name
+        + json arguments
+        + optional~int~ tool_exit_code
+        + int64_t tokens_used
+        + long latency_ms
+        + toJson() json
     }
-    Trajectory "1" *-- "many" Step : Composition
+    class Trajectory {
+        - string task_id_
+        - string model_
+        - vector~TrajectoryStep~ steps_
+        + addStep(AgentStep step)
+        + setResult(AgentRunResult result)
+        + setEvaluation(bool passed, double score, string feedback)
+        + toJson() json
+    }
+    Trajectory "1" *-- "many" TrajectoryStep : Composition
+
+    class TrajectoryRecorder {
+        - path output_directory_
+        + save(Trajectory trajectory)
+    }
 
     class HarnessRunner {
-        - vector~unique_ptr~Evaluator~~ evaluators
-        - AgentLoop agent
-        + runBatch(string tasksJsonPath)
-        - recordTrajectory(Trajectory t)
+        - AgentLoop agent_loop_
+        - Environment environment_
+        - TrajectoryRecorder trajectory_recorder_
+        - map~string, unique_ptr~Evaluator~~ evaluators_
+        - string model_name_
+        + registerEvaluator(unique_ptr~Evaluator~ evaluator)
+        + runTask(BenchmarkTask task) TaskResult
+        + runBatch(vector~BenchmarkTask~ tasks) BatchResult
     }
+    HarnessRunner "1" o-- "1" AgentLoop : Observer / Hook Pattern
+    HarnessRunner "1" o-- "1" Environment : Aggregation
     HarnessRunner "1" *-- "many" Evaluator : Strategy Usage
-    HarnessRunner "1" o-- "1" AgentLoop : Directs / Observes
-    HarnessRunner ..> Trajectory : Processes (Dependency)
+    HarnessRunner "1" *-- "1" TrajectoryRecorder : Composition
+    HarnessRunner ..> Trajectory : Creates

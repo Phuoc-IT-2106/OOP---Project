@@ -97,7 +97,7 @@ void testSkillLoadingAndVietnameseKeywordSelection() {
     SkillLoader loader(directory);
 
     expect(loader.loadSkills() == 2, "SkillLoader should load every markdown file");
-    const auto selected = loader.selectSkills(u8"T\u00EDnh 15 * 17", 1);
+    const auto selected = loader.selectSkills("Tính 15 * 17", 1);
     expect(selected.size() == 1 && selected.front().name == "tool_usage",
            "Vietnamese keyword matching should ignore accents and case");
     expect(selected.front().instructions.find("Keywords:") == std::string::npos,

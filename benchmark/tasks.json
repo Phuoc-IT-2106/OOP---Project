@@ -1,80 +1,90 @@
 [
   {
     "id": "task_001",
-    "description": "Tinh 15 * 17 va luu ket qua vao file result.txt",
-    "instruction": "Tinh 15 nhan 17. Luu ket qua vao file result.txt",
+    "difficulty": "simple",
+    "description": "Calculate 15 * 17 and save the result to result.txt",
+    "instruction": "Calculate 15 multiplied by 17. Save the result to result.txt",
     "eval_type": "functional",
     "eval_script": "file_contains|result.txt|255",
     "max_steps": 10
   },
   {
     "id": "task_002",
-    "description": "Doc file input.txt va dem so dong",
-    "instruction": "Doc file input.txt, dem so dong va tra loi kem tu khoa 'lines'",
+    "difficulty": "simple",
+    "description": "Read input.txt and count the number of lines",
+    "instruction": "Read input.txt, count the number of lines and answer with the keyword 'lines'",
     "eval_type": "keyword",
     "expected_keywords": ["lines"],
     "max_steps": 8
   },
   {
     "id": "task_003",
-    "description": "Lay thoi gian hien tai",
-    "instruction": "Dung tool time de lay thoi gian hien tai va tra loi kem tu khoa 'time'",
+    "difficulty": "simple",
+    "description": "Get current time",
+    "instruction": "Use the time tool to get the current time and answer with the keyword 'time'",
     "eval_type": "keyword",
     "expected_keywords": ["time"],
     "max_steps": 5
   },
   {
     "id": "task_004",
-    "description": "Liet ke thu muc workspace",
-    "instruction": "Liet ke cac file va thu muc cap cao trong workspace",
+    "difficulty": "simple",
+    "description": "List the workspace directory",
+    "instruction": "List all files and top-level directories in the current directory",
     "eval_type": "keyword",
     "expected_keywords": ["src", "skills", "benchmark"],
     "max_steps": 8
   },
   {
     "id": "task_005",
-    "description": "Tinh toan roi ghi file",
-    "instruction": "Tinh (42 + 18) / 3 va ghi ket qua vao output/calc.txt",
+    "difficulty": "medium",
+    "description": "Calculate and write to a file",
+    "instruction": "Calculate (42 + 18) / 3 and write the result to output/calc.txt",
     "eval_type": "functional",
     "eval_script": "file_contains|output/calc.txt|20",
     "max_steps": 10
   },
   {
     "id": "task_006",
-    "description": "Doc file roi thong ke van ban",
-    "instruction": "Doc file notes.txt, dung text_stats de dem so dong va so tu; tra loi kem cac tu khoa 'words' va 'lines'",
+    "difficulty": "medium",
+    "description": "Read file and run text stats",
+    "instruction": "Read notes.txt, use text_stats to count lines and words; answer with the keywords 'words' and 'lines'",
     "eval_type": "keyword",
     "expected_keywords": ["words", "lines"],
     "max_steps": 10
   },
   {
     "id": "task_007",
-    "description": "Luu va tim memory",
-    "instruction": "Luu memory 'project_language=C++17', sau do tim lai memory lien quan den project_language",
+    "difficulty": "medium",
+    "description": "Save and search memory",
+    "instruction": "Save memory 'project_language=C++17', then search for memory related to project_language",
     "eval_type": "keyword",
     "expected_keywords": ["C++17"],
     "max_steps": 10
   },
   {
     "id": "task_008",
-    "description": "Ket hop liet ke thu muc va doc file",
-    "instruction": "Liet ke thu muc skills, chon skill tool_usage.md va tom tat noi dung cua no",
+    "difficulty": "medium",
+    "description": "Combine listing directories and reading files",
+    "instruction": "List the skills directory, choose the skill tool_usage.md and summarize its content",
     "eval_type": "keyword",
     "expected_keywords": ["tool", "usage"],
     "max_steps": 12
   },
   {
     "id": "task_009",
-    "description": "Multi-step voi tinh toan, file va memory",
-    "instruction": "Tinh 15 * 17, ghi vao result.txt, sau do luu ket qua vao memory voi key multiply_result",
+    "difficulty": "hard",
+    "description": "Multi-step with calculation, file, and memory",
+    "instruction": "Calculate 15 * 17, write to result.txt, then save the result to memory with the key multiply_result",
     "eval_type": "functional",
     "eval_script": "file_contains|result.txt|255",
     "max_steps": 15
   },
   {
     "id": "task_010",
-    "description": "Task kho can tu quyet dinh thu tu tool",
-    "instruction": "Kiem tra workspace co README.md khong, doc file neu co, dem so tu va ghi tom tat vao summary.txt",
+    "difficulty": "hard",
+    "description": "Hard task requiring the agent to decide tool order",
+    "instruction": "Check if the current directory has a README.md, read the file if it does, count the number of words, and write a summary to summary.txt",
     "eval_type": "functional",
     "eval_script": "file_nonempty|summary.txt",
     "max_steps": 15

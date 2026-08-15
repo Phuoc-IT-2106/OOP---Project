@@ -22,7 +22,7 @@ std::size_t writeCallback(char *contents, std::size_t size, std::size_t nmemb, v
     if (buffer == nullptr || contents == nullptr) {
         return 0;
     }
-    if (size != 0 && nmemb > std::numeric_limits<std::size_t>::max() / size) {
+    if (size != 0 && nmemb > (std::numeric_limits<std::size_t>::max)() / size) {
         return 0;
     }
     const auto total_size = size * nmemb;
@@ -81,8 +81,8 @@ std::int64_t readIntegerField(const Json &json, const char *field_name) {
     }
 
     const auto unsigned_value = value.get<std::uint64_t>();
-    if (unsigned_value > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
-        return std::numeric_limits<std::int64_t>::max();
+    if (unsigned_value > static_cast<std::uint64_t>((std::numeric_limits<std::int64_t>::max)())) {
+        return (std::numeric_limits<std::int64_t>::max)();
     }
     return static_cast<std::int64_t>(unsigned_value);
 }
@@ -184,7 +184,7 @@ std::string OllamaClient::buildPayload(const ChatRequest &request) const {
         }
     };
 
-    return payload.dump();
+    return payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 ChatResponse OllamaClient::parseResponse(const HttpResponse &http_response, long latency_ms) const {
@@ -247,7 +247,7 @@ HttpResponse defaultOllamaHttpTransport(const std::string &url,
     }
 
     const auto max_curl_payload_size =
-        static_cast<std::uint64_t>(std::numeric_limits<curl_off_t>::max());
+        static_cast<std::uint64_t>((std::numeric_limits<curl_off_t>::max)());
     if (static_cast<std::uint64_t>(payload.size()) > max_curl_payload_size) {
         response.error_message = "request payload is too large";
         curl_easy_cleanup(curl);

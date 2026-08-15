@@ -107,6 +107,9 @@ EvaluationInput HarnessRunner::makeEvaluationInput(
     if (!task.eval_script.empty()) {
         input.metadata["eval_script"] = task.eval_script;
     }
+    if (!task.expected_action.empty()) {
+        input.metadata["expected_action"] = task.expected_action;
+    }
     if (!task.expected_keywords.empty()) {
         input.metadata["expected_keywords"] =
             nlohmann::json(task.expected_keywords).dump();

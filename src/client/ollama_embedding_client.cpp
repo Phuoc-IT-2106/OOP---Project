@@ -142,7 +142,8 @@ std::string OllamaEmbeddingClient::buildPayload(const std::string &text) const {
     // Ollama /api/embed accepts either one string or an array in "input".
     // This client exposes one-text-at-a-time embedding, so the response should
     // contain exactly one vector at embeddings[0].
-    return Json{{"model", config_.model_name}, {"input", text}}.dump();
+    return Json{{"model", config_.model_name}, {"input", text}}.dump(
+        -1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 EmbeddingResponse OllamaEmbeddingClient::parseResponse(

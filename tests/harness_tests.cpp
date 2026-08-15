@@ -3,6 +3,8 @@
 #include "harness/functional_evaluator.h"
 #include "harness/harness_runner.h"
 #include "harness/keyword_evaluator.h"
+#include "harness/sandbox_environment.h"
+#include "harness/vlm_evaluator.h"
 #include "skills/skill_loader.h"
 #include "tools/file_tool.h"
 #include "tools/tool_registry.h"
@@ -139,11 +141,45 @@ void testBatchEvaluationAndJsonOutput() {
     fs::remove_all(root);
 }
 
+void testSandboxEnvironmentLifecycle() {
+    namespace fs = std::filesystem;
+    const fs::path workspace =
+        fs::current_path() / "harness-sandbox-test-workspace";
+    fs::remove_all(workspace);
+
+    oop_agent::harness::SandboxEnvironment environment(
+        workspace, {"data", "output"});
+    environment.setup();
+    expect(fs::exists(workspace / "data") &&
+               fs::exists(workspace / "output"),
+           "SandboxEnvironment should create requested directories");
+
+    std::ofstream(workspace / "output" / "artifact.txt") << "temporary";
+    environment.cleanup();
+    expect(!fs::exists(workspace),
+           "SandboxEnvironment should remove disposable workspace on cleanup");
+}
+
+void testVLMEvaluatorMatchesActionAndKeywords() {
+    oop_agent::harness::EvaluationInput input;
+    input.actual_output =
+        R"({"action":"click","x":120,"y":80,"reason":"open search"})";
+    input.metadata["expected_action"] = "click";
+    input.metadata["expected_keywords"] = R"(["x","y"])";
+
+    const oop_agent::harness::VLMEvaluator evaluator;
+    const auto result = evaluator.evaluate(input);
+    expect(result.passed && result.score == 1.0,
+           "VLMEvaluator should match expected GUI action and keywords");
+}
+
 } // namespace
 
 int main() {
     try {
         testBatchEvaluationAndJsonOutput();
+        testSandboxEnvironmentLifecycle();
+        testVLMEvaluatorMatchesActionAndKeywords();
         std::cout << "All harness tests passed\n";
         return 0;
     } catch (const std::exception &error) {

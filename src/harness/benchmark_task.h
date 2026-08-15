@@ -12,20 +12,24 @@ namespace oop_agent::harness {
 
 struct BenchmarkTask {
     std::string id;
+    std::string difficulty;
     std::string description;
     std::string instruction;
     std::string eval_type;
     std::string eval_script;
+    std::string expected_action;
     std::vector<std::string> expected_keywords;
     std::size_t max_steps{10};
 };
 
 inline void from_json(const nlohmann::json &json, BenchmarkTask &task) {
     json.at("id").get_to(task.id);
+    task.difficulty = json.value("difficulty", "");
     json.at("description").get_to(task.description);
     json.at("instruction").get_to(task.instruction);
     json.at("eval_type").get_to(task.eval_type);
     task.eval_script = json.value("eval_script", "");
+    task.expected_action = json.value("expected_action", "");
     task.expected_keywords =
         json.value("expected_keywords", std::vector<std::string>{});
     task.max_steps = json.value("max_steps", std::size_t{10});

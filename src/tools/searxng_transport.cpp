@@ -22,7 +22,7 @@ std::size_t writeCallback(char *contents,
                           void *user_data) {
     auto *body = static_cast<std::string *>(user_data);
     if (contents == nullptr || body == nullptr ||
-        (size != 0 && count > std::numeric_limits<std::size_t>::max() / size)) {
+        (size != 0 && count > (std::numeric_limits<std::size_t>::max)() / size)) {
         return 0;
     }
     const auto byte_count = size * count;
