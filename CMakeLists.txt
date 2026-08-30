@@ -89,6 +89,7 @@ if(OOP_AGENT_GUI_AVAILABLE)
     target_sources(oop_agent_tools
         PRIVATE
             src/tools/gui_action_tool.cpp
+            src/tools/screenshot_tool.cpp
     )
 
     target_link_libraries(oop_agent_tools
